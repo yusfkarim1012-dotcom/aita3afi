@@ -1,0 +1,7 @@
+name = "ta3afi"
+compatibility_date = "2024-03-20"
+pages_build_output_dir = "dist"
+
+[[kv_namespaces]]
+binding = "TA3AFI_DATA"
+id = "2a34d6dbe246433388a511e66c0d1e08"
