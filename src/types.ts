@@ -3,6 +3,13 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  isPuterAuthPrompt?: boolean;
+}
+
+declare global {
+  interface Window {
+    puter: any;
+  }
 }
 
 export interface Conversation {

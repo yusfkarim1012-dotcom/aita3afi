@@ -11,7 +11,8 @@ export function getApiConfig() {
   const rafiqKey = localStorage.getItem("admin_rafiq_api_key") || DEFAULT_RAFIQ_API_KEY;
   const drModel = localStorage.getItem("admin_doctor_model") || DEFAULT_DOCTOR_MODEL;
   const rafiqModel = localStorage.getItem("admin_rafiq_model") || DEFAULT_RAFIQ_MODEL;
-  return { drKey, rafiqKey, drModel, rafiqModel };
+  const puterModel = localStorage.getItem("admin_puter_model") || "gemini-3-flash-preview";
+  return { drKey, rafiqKey, drModel, rafiqModel, puterModel };
 }
 
 // CORS proxy options to try
@@ -330,7 +331,7 @@ export async function sendMessage(
     ...conversationHistory.slice(-60),
   ];
 
-  const { drKey, rafiqKey, drModel, rafiqModel } = getApiConfig();
+  const { drKey, rafiqKey, drModel, rafiqModel, puterModel } = getApiConfig();
   const apiKey = persona === "doctor" ? drKey : rafiqKey;
   const activeModel = persona === "doctor" ? drModel : rafiqModel;
 
@@ -341,24 +342,41 @@ export async function sendMessage(
     max_tokens: 8000,
   });
 
-  const response = await fetchWithCorsHandling(
-    `${MANUS_BASE_URL}/chat/completions`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body,
+  try {
+    const response = await fetchWithCorsHandling(
+      `${MANUS_BASE_URL}/chat/completions`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body,
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("API Error:", errorText);
+      throw new Error(`API request failed: ${response.status}`);
     }
-  );
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("API Error:", errorText);
-    throw new Error(`API request failed: ${response.status}`);
+    const data = await response.json();
+    return data.choices[0].message.content;
+  } catch (err) {
+    console.warn("Primary API failed, falling back to Puter.js", err);
+    if (window.puter) {
+      if (!window.puter.auth.isSignedIn()) {
+        throw new Error("PUTER_AUTH_REQUIRED");
+      }
+      try {
+        const response = await window.puter.ai.chat(messages, { model: puterModel });
+        return typeof response === "string" ? response : response.message?.content || JSON.stringify(response);
+      } catch (puterErr) {
+        console.error("Puter AI failed:", puterErr);
+        throw puterErr;
+      }
+    }
+    throw err;
   }
-
-  const data = await response.json();
-  return data.choices[0].message.content;
 }

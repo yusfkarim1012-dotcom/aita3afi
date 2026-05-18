@@ -100,6 +100,7 @@ export default function App() {
   const [adminRafiqKey, setAdminRafiqKey] = useState("");
   const [adminDrModel, setAdminDrModel] = useState("");
   const [adminRafiqModel, setAdminRafiqModel] = useState("");
+  const [adminPuterModel, setAdminPuterModel] = useState("");
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -157,11 +158,13 @@ export default function App() {
       const rafiqKey = localStorage.getItem("admin_rafiq_api_key") || "sk-VUgfFKWUMeimyDihMFBJVj";
       const drModel = localStorage.getItem("admin_doctor_model") || "gemini-2.5-flash";
       const rafiqModel = localStorage.getItem("admin_rafiq_model") || "gemini-2.5-flash";
+      const puterModel = localStorage.getItem("admin_puter_model") || "gemini-3-flash-preview";
       
       setAdminDrKey(drKey);
       setAdminRafiqKey(rafiqKey);
       setAdminDrModel(drModel);
       setAdminRafiqModel(rafiqModel);
+      setAdminPuterModel(puterModel);
     } else {
       setAdminError("رمز المرور غير صحيح! حاول مرة أخرى.");
     }
@@ -172,6 +175,7 @@ export default function App() {
     localStorage.setItem("admin_rafiq_api_key", adminRafiqKey.trim());
     localStorage.setItem("admin_doctor_model", adminDrModel.trim());
     localStorage.setItem("admin_rafiq_model", adminRafiqModel.trim());
+    localStorage.setItem("admin_puter_model", adminPuterModel.trim());
     setIsAdminOpen(false);
     
     alert("تم حفظ الإعدادات محلياً! جاري المزامنة السحابية لتحديثها لكافة زوار الموقع...");
@@ -182,6 +186,7 @@ export default function App() {
         { key: "rafiq_api_key", value: adminRafiqKey.trim() },
         { key: "doctor_model", value: adminDrModel.trim() },
         { key: "rafiq_model", value: adminRafiqModel.trim() },
+        { key: "puter_model", value: adminPuterModel.trim() },
       ];
 
       for (const item of config) {
@@ -202,12 +207,13 @@ export default function App() {
     localStorage.removeItem("admin_rafiq_api_key");
     localStorage.removeItem("admin_doctor_model");
     localStorage.removeItem("admin_rafiq_model");
+    localStorage.removeItem("admin_puter_model");
     setIsAdminOpen(false);
     
     alert("تمت إعادة التعيين محلياً! جاري إزالة الإعدادات من السحابة لتعود لوضعها الافتراضي لكافة زوار الموقع...");
     
     try {
-      const keys = ["doctor_api_key", "rafiq_api_key", "doctor_model", "rafiq_model"];
+      const keys = ["doctor_api_key", "rafiq_api_key", "doctor_model", "rafiq_model", "puter_model"];
       for (const k of keys) {
         await fetch(`/api/kv/${k}`, {
           method: "POST",
@@ -230,6 +236,7 @@ export default function App() {
           { local: "admin_rafiq_api_key", remote: "rafiq_api_key" },
           { local: "admin_doctor_model", remote: "doctor_model" },
           { local: "admin_rafiq_model", remote: "rafiq_model" },
+          { local: "admin_puter_model", remote: "puter_model" },
         ];
         
         for (const k of keys) {
@@ -302,8 +309,18 @@ export default function App() {
       ];
       const res = await sendMessage(hist, currentPersona);
       addMessage({ id: "a" + Date.now(), role: "assistant", content: res, timestamp: new Date() });
-    } catch {
-      addMessage({ id: "a" + Date.now(), role: "assistant", content: "عذرا صارت مشكلة تقنية جرب مرة ثانية", timestamp: new Date() });
+    } catch (err: any) {
+      if (err.message === "PUTER_AUTH_REQUIRED") {
+        addMessage({ 
+          id: "a" + Date.now(), 
+          role: "assistant", 
+          content: "عذراً، توقف الخادم الأساسي للذكاء الاصطناعي عن العمل بسبب الضغط أو نفاذ الرصيد.\n\nلحسن الحظ، قمنا بتفعيل **خادم الطوارئ المجاني**! يرجى الضغط على الزر أدناه لإنشاء حساب مجاني (أو تسجيل الدخول) للاستمرار في التحدث.", 
+          timestamp: new Date(),
+          isPuterAuthPrompt: true 
+        });
+      } else {
+        addMessage({ id: "a" + Date.now(), role: "assistant", content: "عذرا صارت مشكلة تقنية جرب مرة ثانية", timestamp: new Date() });
+      }
     } finally { setLoading(false); }
   };
 
@@ -485,6 +502,25 @@ export default function App() {
                       fontFamily: "monospace"
                     }}
                   />
+                </div>
+
+                {/* Puter Model */}
+                <div className="space-y-1.5 pt-2 mt-2 border-t" style={{ borderColor: P.border }}>
+                  <label className="text-[12px] font-bold" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>موديل خادم الطوارئ (Puter Fallback)</label>
+                  <input 
+                    type="text"
+                    value={adminPuterModel}
+                    onChange={(e) => setAdminPuterModel(e.target.value)}
+                    placeholder="gemini-3-flash-preview..."
+                    className="w-full px-4 py-3 rounded-2xl text-[13px] font-medium outline-none transition-all"
+                    style={{ 
+                      background: P.bg,
+                      border: `1px solid ${P.border}`,
+                      color: P.text,
+                      fontFamily: "monospace"
+                    }}
+                  />
+                  <p className="text-[10px]" style={{ color: P.text2 }}>يتم استخدامه تلقائياً كخادم احتياطي مجاني في حال توقف الخادم الأساسي.</p>
                 </div>
               </div>
 
@@ -779,7 +815,7 @@ export default function App() {
                   style={{ animationDelay: `${Math.min(i * 0.05, 0.2)}s` }}
                 >
                   {msg.role === "assistant" ? (
-                    <BotMsg content={msg.content} t={fmtTime(msg.timestamp)} dark={dark} fSize={fSize} P={P} botName={botName} isDoctor={currentPersona === "doctor"} />
+                    <BotMsg content={msg.content} t={fmtTime(msg.timestamp)} dark={dark} fSize={fSize} P={P} botName={botName} isDoctor={currentPersona === "doctor"} isPuterAuthPrompt={msg.isPuterAuthPrompt} />
                   ) : (
                     <UserMsg content={msg.content} t={fmtTime(msg.timestamp)} dark={dark} fSize={fSize} P={P} />
                   )}
@@ -1034,9 +1070,10 @@ interface MsgProps {
   P: Record<string, string>;
   botName?: string;
   isDoctor?: boolean;
+  isPuterAuthPrompt?: boolean;
 }
 
-function BotMsg({ content, t, dark, fSize, P, botName, isDoctor }: MsgProps) {
+function BotMsg({ content, t, dark, fSize, P, botName, isDoctor, isPuterAuthPrompt }: MsgProps) {
   return (
     <div className="flex items-start gap-3 w-full">
       <BotAvatar size={36} isDoctor={isDoctor} />
@@ -1069,6 +1106,17 @@ function BotMsg({ content, t, dark, fSize, P, botName, isDoctor }: MsgProps) {
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {content}
             </ReactMarkdown>
+            {isPuterAuthPrompt && (
+              <div className="pt-4 mt-4 border-t border-dashed flex justify-center" style={{ borderColor: P.border }}>
+                <button
+                  onClick={() => window.puter && window.puter.auth.signIn()}
+                  className="px-6 py-3 rounded-2xl font-bold text-[13px] text-white transition-all cursor-pointer hover:opacity-90 shadow-lg flex items-center gap-2 animate-bounce"
+                  style={{ background: "#6366f1", fontFamily: "'Noto Kufi Arabic'" }}
+                >
+                  <span>🚀 إنشاء حساب / تسجيل الدخول في خادم الطوارئ</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
