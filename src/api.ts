@@ -327,7 +327,7 @@ export async function sendMessage(
       role: "system",
       content: persona === "doctor" ? DR_SYSTEM_PROMPT : RAFIQ_SYSTEM_PROMPT,
     },
-    ...conversationHistory.slice(-50),
+    ...conversationHistory.slice(-60),
   ];
 
   const { drKey, rafiqKey, drModel, rafiqModel } = getApiConfig();
