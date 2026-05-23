@@ -4,4 +4,4 @@ pages_build_output_dir = "dist"
 
 [[kv_namespaces]]
 binding = "TA3AFI_DATA"
-id = "481d2ed998f24e3b83e389f0172f2305"
+id = "2a34d6dbe246433388a511e66c0d1e08"
