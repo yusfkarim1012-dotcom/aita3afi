@@ -71,10 +71,8 @@ export default function App() {
       const path = window.location.pathname.replace(/\/$/, ""); // Strip trailing slash
       if (path === "/admin") {
         setCurrentPage("admin");
-        setIsAdminOpen(true);
       } else {
         setCurrentPage("chat");
-        setIsAdminOpen(false);
       }
     };
     
@@ -91,7 +89,6 @@ export default function App() {
   const [userAuthSuccess, setUserAuthSuccess] = useState("");
 
   // Admin Panel States
-  const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
   const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
   const [adminError, setAdminError] = useState("");
@@ -141,12 +138,7 @@ export default function App() {
     }
   };
 
-  const handleOpenAdmin = () => {
-    setIsAdminOpen(true);
-    setIsAdminAuthorized(false);
-    setAdminPassword("");
-    setAdminError("");
-  };
+
 
   const handleAuthorize = (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,7 +168,6 @@ export default function App() {
     localStorage.setItem("admin_doctor_model", adminDrModel.trim());
     localStorage.setItem("admin_rafiq_model", adminRafiqModel.trim());
     localStorage.setItem("admin_puter_model", adminPuterModel.trim());
-    setIsAdminOpen(false);
     
     alert("تم حفظ الإعدادات محلياً! جاري المزامنة السحابية لتحديثها لكافة زوار الموقع...");
     
@@ -208,7 +199,6 @@ export default function App() {
     localStorage.removeItem("admin_doctor_model");
     localStorage.removeItem("admin_rafiq_model");
     localStorage.removeItem("admin_puter_model");
-    setIsAdminOpen(false);
     
     alert("تمت إعادة التعيين محلياً! جاري إزالة الإعدادات من السحابة لتعود لوضعها الافتراضي لكافة زوار الموقع...");
     
