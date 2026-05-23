@@ -93,8 +93,8 @@ export default function App() {
   const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
   const [adminError, setAdminError] = useState("");
 
-  const [adminDrKeys, setAdminDrKeys] = useState<string[]>([""]);
-  const [adminRafiqKeys, setAdminRafiqKeys] = useState<string[]>([""]);
+  const [adminDrKeys, setAdminDrKeys] = useState<string[]>(() => Array(10).fill(""));
+  const [adminRafiqKeys, setAdminRafiqKeys] = useState<string[]>(() => Array(10).fill(""));
   const [adminDrModel, setAdminDrModel] = useState("");
   const [adminRafiqModel, setAdminRafiqModel] = useState("");
   const [adminPuterModel, setAdminPuterModel] = useState("");
@@ -149,28 +149,32 @@ export default function App() {
       const drSaved = localStorage.getItem("admin_doctor_api_keys");
       const rafiqSaved = localStorage.getItem("admin_rafiq_api_keys");
       
-      let drKeysList: string[] = [""];
-      let rafiqKeysList: string[] = [""];
+      let drKeysList: string[] = Array(10).fill("");
+      let rafiqKeysList: string[] = Array(10).fill("");
       
       try {
         if (drSaved) {
           const parsed = JSON.parse(drSaved);
-          if (Array.isArray(parsed) && parsed.length > 0) drKeysList = parsed;
+          if (Array.isArray(parsed)) {
+            drKeysList = [...parsed, ...Array(10).fill("")].slice(0, 10);
+          }
         } else {
           // fallback to single key
           const single = localStorage.getItem("admin_doctor_api_key") || "sk-hLwMhHmK84UppzziebKMn5";
-          if (single) drKeysList = [single];
+          drKeysList = [single, ...Array(9).fill("")];
         }
       } catch {}
 
       try {
         if (rafiqSaved) {
           const parsed = JSON.parse(rafiqSaved);
-          if (Array.isArray(parsed) && parsed.length > 0) rafiqKeysList = parsed;
+          if (Array.isArray(parsed)) {
+            rafiqKeysList = [...parsed, ...Array(10).fill("")].slice(0, 10);
+          }
         } else {
           // fallback to single key
           const single = localStorage.getItem("admin_rafiq_api_key") || "sk-VUgfFKWUMeimyDihMFBJVj";
-          if (single) rafiqKeysList = [single];
+          rafiqKeysList = [single, ...Array(9).fill("")];
         }
       } catch {}
       
@@ -471,104 +475,54 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Doctor Keys */}
                 <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[12px] font-bold" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مفاتيح API لدكتور التعافي (بحد أقصى 10)</label>
-                    {adminDrKeys.length < 10 && (
-                      <button
-                        onClick={() => setAdminDrKeys([...adminDrKeys, ""])}
-                        className="text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all cursor-pointer hover:opacity-85 hover:scale-105 active:scale-95 flex items-center gap-1"
-                        style={{ background: P.accentLight, color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}
-                      >
-                        <Plus size={10} />
-                        إضافة مفتاح
-                      </button>
-                    )}
-                  </div>
-                  <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin">
+                  <label className="text-[12px] font-bold" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مفاتيح API لدكتور التعافي (١ إلى ١٠)</label>
+                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
                     {adminDrKeys.map((key, index) => (
-                      <div key={index} className="flex gap-2 items-center">
-                        <input 
-                          type="text"
-                          value={key}
-                          onChange={(e) => {
-                            const next = [...adminDrKeys];
-                            next[index] = e.target.value;
-                            setAdminDrKeys(next);
-                          }}
-                          placeholder={`المفتاح #${index + 1}`}
-                          className="flex-1 px-4 py-2.5 rounded-xl text-[12px] font-medium outline-none transition-all"
-                          style={{ 
-                            background: P.bg,
-                            border: `1px solid ${P.border}`,
-                            color: P.text,
-                            fontFamily: "monospace"
-                          }}
-                        />
-                        {adminDrKeys.length > 1 && (
-                          <button
-                            onClick={() => {
-                              const next = adminDrKeys.filter((_, idx) => idx !== index);
-                              setAdminDrKeys(next);
-                            }}
-                            className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer transition-all hover:bg-red-500/10 text-red-500"
-                            style={{ background: P.bg, border: `1px solid ${P.border}` }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
-                      </div>
+                      <input 
+                        key={index}
+                        type="text"
+                        value={key}
+                        onChange={(e) => {
+                          const next = [...adminDrKeys];
+                          next[index] = e.target.value;
+                          setAdminDrKeys(next);
+                        }}
+                        placeholder={`المفتاح #${index + 1}`}
+                        className="w-full px-4 py-2.5 rounded-xl text-[12px] font-medium outline-none transition-all"
+                        style={{ 
+                          background: P.bg,
+                          border: `1px solid ${P.border}`,
+                          color: P.text,
+                          fontFamily: "monospace"
+                        }}
+                      />
                     ))}
                   </div>
                 </div>
 
                 {/* Rafiq Keys */}
                 <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[12px] font-bold" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مفاتيح API لرفيق التعافي (بحد أقصى 10)</label>
-                    {adminRafiqKeys.length < 10 && (
-                      <button
-                        onClick={() => setAdminRafiqKeys([...adminRafiqKeys, ""])}
-                        className="text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all cursor-pointer hover:opacity-85 hover:scale-105 active:scale-95 flex items-center gap-1"
-                        style={{ background: P.accentLight, color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}
-                      >
-                        <Plus size={10} />
-                        إضافة مفتاح
-                      </button>
-                    )}
-                  </div>
-                  <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin">
+                  <label className="text-[12px] font-bold" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مفاتيح API لرفيق التعافي (١ إلى ١٠)</label>
+                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
                     {adminRafiqKeys.map((key, index) => (
-                      <div key={index} className="flex gap-2 items-center">
-                        <input 
-                          type="text"
-                          value={key}
-                          onChange={(e) => {
-                            const next = [...adminRafiqKeys];
-                            next[index] = e.target.value;
-                            setAdminRafiqKeys(next);
-                          }}
-                          placeholder={`المفتاح #${index + 1}`}
-                          className="flex-1 px-4 py-2.5 rounded-xl text-[12px] font-medium outline-none transition-all"
-                          style={{ 
-                            background: P.bg,
-                            border: `1px solid ${P.border}`,
-                            color: P.text,
-                            fontFamily: "monospace"
-                          }}
-                        />
-                        {adminRafiqKeys.length > 1 && (
-                          <button
-                            onClick={() => {
-                              const next = adminRafiqKeys.filter((_, idx) => idx !== index);
-                              setAdminRafiqKeys(next);
-                            }}
-                            className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer transition-all hover:bg-red-500/10 text-red-500"
-                            style={{ background: P.bg, border: `1px solid ${P.border}` }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
-                      </div>
+                      <input 
+                        key={index}
+                        type="text"
+                        value={key}
+                        onChange={(e) => {
+                          const next = [...adminRafiqKeys];
+                          next[index] = e.target.value;
+                          setAdminRafiqKeys(next);
+                        }}
+                        placeholder={`المفتاح #${index + 1}`}
+                        className="w-full px-4 py-2.5 rounded-xl text-[12px] font-medium outline-none transition-all"
+                        style={{ 
+                          background: P.bg,
+                          border: `1px solid ${P.border}`,
+                          color: P.text,
+                          fontFamily: "monospace"
+                        }}
+                      />
                     ))}
                   </div>
                 </div>
