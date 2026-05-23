@@ -395,7 +395,7 @@ export default function App() {
   if (currentPage === "admin") {
     return (
       <div 
-        className="h-screen w-screen flex items-center justify-center p-4 sm:p-8" 
+        className="min-h-screen w-screen overflow-y-auto flex items-center justify-center p-4 sm:p-8" 
         dir="rtl" 
         style={{ 
           background: P.bg, 
@@ -403,7 +403,7 @@ export default function App() {
         }}
       >
         <div 
-          className="w-full max-w-2xl rounded-3xl p-6 sm:p-8 space-y-6 anim-scale-up"
+          className="w-full max-w-2xl rounded-3xl p-5 sm:p-8 my-auto space-y-6 anim-scale-up"
           style={{ 
             background: P.card, 
             border: `1px solid ${P.border}`,
