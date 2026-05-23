@@ -7,12 +7,44 @@ export const DEFAULT_RAFIQ_MODEL = "gemini-2.5-flash";
 const MANUS_BASE_URL = "https://api.manus.im/api/llm-proxy/v1";
 
 export function getApiConfig() {
-  const drKey = localStorage.getItem("admin_doctor_api_key") || DEFAULT_DOCTOR_API_KEY;
-  const rafiqKey = localStorage.getItem("admin_rafiq_api_key") || DEFAULT_RAFIQ_API_KEY;
+  let drKeys: string[] = [];
+  let rafiqKeys: string[] = [];
+
+  try {
+    const drSaved = localStorage.getItem("admin_doctor_api_keys");
+    if (drSaved) {
+      const parsed = JSON.parse(drSaved);
+      if (Array.isArray(parsed)) drKeys = parsed;
+    }
+  } catch (e) {
+    console.error("Failed to parse doctor keys:", e);
+  }
+
+  try {
+    const rafiqSaved = localStorage.getItem("admin_rafiq_api_keys");
+    if (rafiqSaved) {
+      const parsed = JSON.parse(rafiqSaved);
+      if (Array.isArray(parsed)) rafiqKeys = parsed;
+    }
+  } catch (e) {
+    console.error("Failed to parse rafiq keys:", e);
+  }
+
+  // Fallback to old single keys or default keys if the lists are empty
+  if (drKeys.length === 0) {
+    const oldKey = localStorage.getItem("admin_doctor_api_key") || DEFAULT_DOCTOR_API_KEY;
+    if (oldKey) drKeys = [oldKey];
+  }
+  if (rafiqKeys.length === 0) {
+    const oldKey = localStorage.getItem("admin_rafiq_api_key") || DEFAULT_RAFIQ_API_KEY;
+    if (oldKey) rafiqKeys = [oldKey];
+  }
+
   const drModel = localStorage.getItem("admin_doctor_model") || DEFAULT_DOCTOR_MODEL;
   const rafiqModel = localStorage.getItem("admin_rafiq_model") || DEFAULT_RAFIQ_MODEL;
   const puterModel = localStorage.getItem("admin_puter_model") || "gemini-3-flash-preview";
-  return { drKey, rafiqKey, drModel, rafiqModel, puterModel };
+
+  return { drKeys, rafiqKeys, drModel, rafiqModel, puterModel };
 }
 
 // CORS proxy options to try
@@ -331,52 +363,67 @@ export async function sendMessage(
     ...conversationHistory.slice(-60),
   ];
 
-  const { drKey, rafiqKey, drModel, rafiqModel, puterModel } = getApiConfig();
-  const apiKey = persona === "doctor" ? drKey : rafiqKey;
+  const { drKeys, rafiqKeys, drModel, rafiqModel, puterModel } = getApiConfig();
+  const apiKeys = (persona === "doctor" ? drKeys : rafiqKeys).filter(k => k.trim() !== "");
   const activeModel = persona === "doctor" ? drModel : rafiqModel;
 
-  const body = JSON.stringify({
-    model: activeModel,
-    messages,
-    temperature: 0.8,
-    max_tokens: 8000,
-  });
+  // Use fallback defaults if no keys are found
+  const keysToTry = apiKeys.length > 0 ? apiKeys : [persona === "doctor" ? DEFAULT_DOCTOR_API_KEY : DEFAULT_RAFIQ_API_KEY];
 
-  try {
-    const response = await fetchWithCorsHandling(
-      `${MANUS_BASE_URL}/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body,
+  let lastError: any = null;
+
+  for (let index = 0; index < keysToTry.length; index++) {
+    const apiKey = keysToTry[index];
+    console.log(`Trying API key index ${index} for ${persona}...`);
+
+    const body = JSON.stringify({
+      model: activeModel,
+      messages,
+      temperature: 0.8,
+      max_tokens: 8000,
+    });
+
+    try {
+      const response = await fetchWithCorsHandling(
+        `${MANUS_BASE_URL}/chat/completions`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body,
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`API Error for key index ${index}:`, errorText);
+        throw new Error(`API request failed with status: ${response.status}`);
       }
-    );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("API Error:", errorText);
-      throw new Error(`API request failed: ${response.status}`);
+      const data = await response.json();
+      return data.choices[0].message.content;
+    } catch (err) {
+      console.warn(`Key index ${index} failed:`, err);
+      lastError = err;
+      // Continue loop to try the next key
     }
-
-    const data = await response.json();
-    return data.choices[0].message.content;
-  } catch (err) {
-    console.warn("Primary API failed, falling back to Puter.js", err);
-    if (window.puter) {
-      if (!window.puter.auth.isSignedIn()) {
-        throw new Error("PUTER_AUTH_REQUIRED");
-      }
-      try {
-        const response = await window.puter.ai.chat(messages, { model: puterModel });
-        return typeof response === "string" ? response : response.message?.content || JSON.stringify(response);
-      } catch (puterErr) {
-        console.error("Puter AI failed:", puterErr);
-        throw puterErr;
-      }
-    }
-    throw err;
   }
+
+  // All keys failed, try emergency fallback to Puter.js
+  console.warn("Primary API failed, falling back to Puter.js", lastError);
+  if (window.puter) {
+    if (!window.puter.auth.isSignedIn()) {
+      throw new Error("PUTER_AUTH_REQUIRED");
+    }
+    try {
+      const response = await window.puter.ai.chat(messages, { model: puterModel });
+      return typeof response === "string" ? response : response.message?.content || JSON.stringify(response);
+    } catch (puterErr) {
+      console.error("Puter AI failed:", puterErr);
+      throw puterErr;
+    }
+  }
+  throw lastError || new Error("All API keys failed");
 }

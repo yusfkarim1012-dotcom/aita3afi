@@ -93,8 +93,8 @@ export default function App() {
   const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
   const [adminError, setAdminError] = useState("");
 
-  const [adminDrKey, setAdminDrKey] = useState("");
-  const [adminRafiqKey, setAdminRafiqKey] = useState("");
+  const [adminDrKeys, setAdminDrKeys] = useState<string[]>([""]);
+  const [adminRafiqKeys, setAdminRafiqKeys] = useState<string[]>([""]);
   const [adminDrModel, setAdminDrModel] = useState("");
   const [adminRafiqModel, setAdminRafiqModel] = useState("");
   const [adminPuterModel, setAdminPuterModel] = useState("");
@@ -146,14 +146,41 @@ export default function App() {
       setIsAdminAuthorized(true);
       setAdminError("");
       
-      const drKey = localStorage.getItem("admin_doctor_api_key") || "sk-hLwMhHmK84UppzziebKMn5";
-      const rafiqKey = localStorage.getItem("admin_rafiq_api_key") || "sk-VUgfFKWUMeimyDihMFBJVj";
+      const drSaved = localStorage.getItem("admin_doctor_api_keys");
+      const rafiqSaved = localStorage.getItem("admin_rafiq_api_keys");
+      
+      let drKeysList: string[] = [""];
+      let rafiqKeysList: string[] = [""];
+      
+      try {
+        if (drSaved) {
+          const parsed = JSON.parse(drSaved);
+          if (Array.isArray(parsed) && parsed.length > 0) drKeysList = parsed;
+        } else {
+          // fallback to single key
+          const single = localStorage.getItem("admin_doctor_api_key") || "sk-hLwMhHmK84UppzziebKMn5";
+          if (single) drKeysList = [single];
+        }
+      } catch {}
+
+      try {
+        if (rafiqSaved) {
+          const parsed = JSON.parse(rafiqSaved);
+          if (Array.isArray(parsed) && parsed.length > 0) rafiqKeysList = parsed;
+        } else {
+          // fallback to single key
+          const single = localStorage.getItem("admin_rafiq_api_key") || "sk-VUgfFKWUMeimyDihMFBJVj";
+          if (single) rafiqKeysList = [single];
+        }
+      } catch {}
+      
+      setAdminDrKeys(drKeysList);
+      setAdminRafiqKeys(rafiqKeysList);
+      
       const drModel = localStorage.getItem("admin_doctor_model") || "gemini-2.5-flash";
       const rafiqModel = localStorage.getItem("admin_rafiq_model") || "gemini-2.5-flash";
       const puterModel = localStorage.getItem("admin_puter_model") || "gemini-3-flash-preview";
       
-      setAdminDrKey(drKey);
-      setAdminRafiqKey(rafiqKey);
       setAdminDrModel(drModel);
       setAdminRafiqModel(rafiqModel);
       setAdminPuterModel(puterModel);
@@ -163,8 +190,16 @@ export default function App() {
   };
 
   const handleSaveAdminSettings = async () => {
-    localStorage.setItem("admin_doctor_api_key", adminDrKey.trim());
-    localStorage.setItem("admin_rafiq_api_key", adminRafiqKey.trim());
+    const cleanedDrKeys = adminDrKeys.map(k => k.trim()).filter(k => k !== "");
+    const cleanedRafiqKeys = adminRafiqKeys.map(k => k.trim()).filter(k => k !== "");
+
+    if (cleanedDrKeys.length === 0) cleanedDrKeys.push("");
+    if (cleanedRafiqKeys.length === 0) cleanedRafiqKeys.push("");
+
+    localStorage.setItem("admin_doctor_api_keys", JSON.stringify(cleanedDrKeys));
+    localStorage.setItem("admin_rafiq_api_keys", JSON.stringify(cleanedRafiqKeys));
+    localStorage.setItem("admin_doctor_api_key", cleanedDrKeys[0] || "");
+    localStorage.setItem("admin_rafiq_api_key", cleanedRafiqKeys[0] || "");
     localStorage.setItem("admin_doctor_model", adminDrModel.trim());
     localStorage.setItem("admin_rafiq_model", adminRafiqModel.trim());
     localStorage.setItem("admin_puter_model", adminPuterModel.trim());
@@ -173,8 +208,10 @@ export default function App() {
     
     try {
       const config = [
-        { key: "doctor_api_key", value: adminDrKey.trim() },
-        { key: "rafiq_api_key", value: adminRafiqKey.trim() },
+        { key: "doctor_api_keys", value: JSON.stringify(cleanedDrKeys) },
+        { key: "rafiq_api_keys", value: JSON.stringify(cleanedRafiqKeys) },
+        { key: "doctor_api_key", value: cleanedDrKeys[0] || "" },
+        { key: "rafiq_api_key", value: cleanedRafiqKeys[0] || "" },
         { key: "doctor_model", value: adminDrModel.trim() },
         { key: "rafiq_model", value: adminRafiqModel.trim() },
         { key: "puter_model", value: adminPuterModel.trim() },
@@ -196,6 +233,8 @@ export default function App() {
   const handleResetAdminSettings = async () => {
     localStorage.removeItem("admin_doctor_api_key");
     localStorage.removeItem("admin_rafiq_api_key");
+    localStorage.removeItem("admin_doctor_api_keys");
+    localStorage.removeItem("admin_rafiq_api_keys");
     localStorage.removeItem("admin_doctor_model");
     localStorage.removeItem("admin_rafiq_model");
     localStorage.removeItem("admin_puter_model");
@@ -203,7 +242,15 @@ export default function App() {
     alert("تمت إعادة التعيين محلياً! جاري إزالة الإعدادات من السحابة لتعود لوضعها الافتراضي لكافة زوار الموقع...");
     
     try {
-      const keys = ["doctor_api_key", "rafiq_api_key", "doctor_model", "rafiq_model", "puter_model"];
+      const keys = [
+        "doctor_api_key", 
+        "rafiq_api_key", 
+        "doctor_api_keys", 
+        "rafiq_api_keys", 
+        "doctor_model", 
+        "rafiq_model", 
+        "puter_model"
+      ];
       for (const k of keys) {
         await fetch(`/api/kv/${k}`, {
           method: "POST",
@@ -224,6 +271,8 @@ export default function App() {
         const keys = [
           { local: "admin_doctor_api_key", remote: "doctor_api_key" },
           { local: "admin_rafiq_api_key", remote: "rafiq_api_key" },
+          { local: "admin_doctor_api_keys", remote: "doctor_api_keys" },
+          { local: "admin_rafiq_api_keys", remote: "rafiq_api_keys" },
           { local: "admin_doctor_model", remote: "doctor_model" },
           { local: "admin_rafiq_model", remote: "rafiq_model" },
           { local: "admin_puter_model", remote: "puter_model" },
@@ -419,41 +468,109 @@ export default function App() {
           ) : (
             /* Settings Page */
             <div className="space-y-4 pt-2">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Doctor Key */}
-                <div className="space-y-1.5">
-                  <label className="text-[12px] font-bold" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مفتاح API لدكتور التعافي</label>
-                  <input 
-                    type="text"
-                    value={adminDrKey}
-                    onChange={(e) => setAdminDrKey(e.target.value)}
-                    placeholder="sk-..."
-                    className="w-full px-4 py-3 rounded-2xl text-[13px] font-medium outline-none transition-all"
-                    style={{ 
-                      background: P.bg,
-                      border: `1px solid ${P.border}`,
-                      color: P.text,
-                      fontFamily: "monospace"
-                    }}
-                  />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Doctor Keys */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[12px] font-bold" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مفاتيح API لدكتور التعافي (بحد أقصى 10)</label>
+                    {adminDrKeys.length < 10 && (
+                      <button
+                        onClick={() => setAdminDrKeys([...adminDrKeys, ""])}
+                        className="text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all cursor-pointer hover:opacity-85 hover:scale-105 active:scale-95 flex items-center gap-1"
+                        style={{ background: P.accentLight, color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}
+                      >
+                        <Plus size={10} />
+                        إضافة مفتاح
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin">
+                    {adminDrKeys.map((key, index) => (
+                      <div key={index} className="flex gap-2 items-center">
+                        <input 
+                          type="text"
+                          value={key}
+                          onChange={(e) => {
+                            const next = [...adminDrKeys];
+                            next[index] = e.target.value;
+                            setAdminDrKeys(next);
+                          }}
+                          placeholder={`المفتاح #${index + 1}`}
+                          className="flex-1 px-4 py-2.5 rounded-xl text-[12px] font-medium outline-none transition-all"
+                          style={{ 
+                            background: P.bg,
+                            border: `1px solid ${P.border}`,
+                            color: P.text,
+                            fontFamily: "monospace"
+                          }}
+                        />
+                        {adminDrKeys.length > 1 && (
+                          <button
+                            onClick={() => {
+                              const next = adminDrKeys.filter((_, idx) => idx !== index);
+                              setAdminDrKeys(next);
+                            }}
+                            className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer transition-all hover:bg-red-500/10 text-red-500"
+                            style={{ background: P.bg, border: `1px solid ${P.border}` }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Rafiq Key */}
-                <div className="space-y-1.5">
-                  <label className="text-[12px] font-bold" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مفتاح API لرفيق التعافي</label>
-                  <input 
-                    type="text"
-                    value={adminRafiqKey}
-                    onChange={(e) => setAdminRafiqKey(e.target.value)}
-                    placeholder="sk-..."
-                    className="w-full px-4 py-3 rounded-2xl text-[13px] font-medium outline-none transition-all"
-                    style={{ 
-                      background: P.bg,
-                      border: `1px solid ${P.border}`,
-                      color: P.text,
-                      fontFamily: "monospace"
-                    }}
-                  />
+                {/* Rafiq Keys */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[12px] font-bold" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مفاتيح API لرفيق التعافي (بحد أقصى 10)</label>
+                    {adminRafiqKeys.length < 10 && (
+                      <button
+                        onClick={() => setAdminRafiqKeys([...adminRafiqKeys, ""])}
+                        className="text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all cursor-pointer hover:opacity-85 hover:scale-105 active:scale-95 flex items-center gap-1"
+                        style={{ background: P.accentLight, color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}
+                      >
+                        <Plus size={10} />
+                        إضافة مفتاح
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin">
+                    {adminRafiqKeys.map((key, index) => (
+                      <div key={index} className="flex gap-2 items-center">
+                        <input 
+                          type="text"
+                          value={key}
+                          onChange={(e) => {
+                            const next = [...adminRafiqKeys];
+                            next[index] = e.target.value;
+                            setAdminRafiqKeys(next);
+                          }}
+                          placeholder={`المفتاح #${index + 1}`}
+                          className="flex-1 px-4 py-2.5 rounded-xl text-[12px] font-medium outline-none transition-all"
+                          style={{ 
+                            background: P.bg,
+                            border: `1px solid ${P.border}`,
+                            color: P.text,
+                            fontFamily: "monospace"
+                          }}
+                        />
+                        {adminRafiqKeys.length > 1 && (
+                          <button
+                            onClick={() => {
+                              const next = adminRafiqKeys.filter((_, idx) => idx !== index);
+                              setAdminRafiqKeys(next);
+                            }}
+                            className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer transition-all hover:bg-red-500/10 text-red-500"
+                            style={{ background: P.bg, border: `1px solid ${P.border}` }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
