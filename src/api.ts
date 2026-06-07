@@ -86,6 +86,9 @@ export function getApiConfig() {
 
   const puterModel = localStorage.getItem("admin_puter_model") || "gemini-3-flash-preview";
 
+  const serverDisabled = localStorage.getItem("admin_server_disabled") || "";
+  const serverPriority = localStorage.getItem("admin_server_priority") || "bluesminds_first";
+
   return { 
     drKeys, 
     rafiqKeys, 
@@ -95,7 +98,9 @@ export function getApiConfig() {
     bmDrKeys,
     bmRafiqKeys,
     bmDrModel,
-    bmRafiqModel
+    bmRafiqModel,
+    serverDisabled,
+    serverPriority
   };
 }
 
@@ -422,90 +427,89 @@ export async function sendMessage(
   const bmKeys = (persona === "doctor" ? config.bmDrKeys : config.bmRafiqKeys).filter(k => k.trim() !== "");
   const manusKeys = (persona === "doctor" ? config.drKeys : config.rafiqKeys).filter(k => k.trim() !== "");
 
+  const { serverDisabled, serverPriority } = config;
+  const isBluesmindsDisabled = serverDisabled === "bluesminds";
+  const isManusDisabled = serverDisabled === "manus";
+  const isManusFirst = serverPriority === "manus_first";
+
   let lastError: any = null;
 
-  // 1. Try Bluesminds keys first
-  const bmKeysToTry = bmKeys.length > 0 ? bmKeys : [DEFAULT_BLUESMINDS_API_KEY];
-  for (let index = 0; index < bmKeysToTry.length; index++) {
-    const apiKey = bmKeysToTry[index];
-    if (!apiKey) continue;
-    console.log(`Trying Bluesminds API key index ${index} for ${persona}...`);
-
-    const body = JSON.stringify({
-      model: activeModelBm,
-      messages,
-      temperature: 0.8,
-      max_tokens: 8000,
-    });
-
-    try {
-      const response = await fetchWithCorsHandling(
-        `${BLUESMINDS_BASE_URL}/chat/completions`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body,
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Bluesminds API Error for key index ${index}:`, errorText);
-        throw new Error(`Bluesminds API request failed with status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return { content: data.choices[0].message.content, serverUsed: "first" };
-    } catch (err) {
-      console.warn(`Bluesminds key index ${index} failed:`, err);
-      lastError = err;
+  // Helper: try Bluesminds
+  const tryBluesminds = async (): Promise<{ content: string; serverUsed: "first" | "second" | "third" } | null> => {
+    if (isBluesmindsDisabled) {
+      console.log("Bluesminds is DISABLED by admin, skipping...");
+      return null;
     }
-  }
-
-  // 2. Try Manus keys if Bluesminds fails
-  console.log("Bluesminds failed or not configured, trying Manus...");
-  const manusKeysToTry = manusKeys.length > 0 ? manusKeys : [persona === "doctor" ? DEFAULT_DOCTOR_API_KEY : DEFAULT_RAFIQ_API_KEY];
-  for (let index = 0; index < manusKeysToTry.length; index++) {
-    const apiKey = manusKeysToTry[index];
-    if (!apiKey) continue;
-    console.log(`Trying Manus API key index ${index} for ${persona}...`);
-
-    const body = JSON.stringify({
-      model: activeModelManus,
-      messages,
-      temperature: 0.8,
-      max_tokens: 8000,
-    });
-
-    try {
-      const response = await fetchWithCorsHandling(
-        `${MANUS_BASE_URL}/chat/completions`,
-        {
+    const bmKeysToTry = bmKeys.length > 0 ? bmKeys : [DEFAULT_BLUESMINDS_API_KEY];
+    for (let index = 0; index < bmKeysToTry.length; index++) {
+      const apiKey = bmKeysToTry[index];
+      if (!apiKey) continue;
+      console.log(`Trying Bluesminds API key index ${index} for ${persona}...`);
+      const body = JSON.stringify({ model: activeModelBm, messages, temperature: 0.8, max_tokens: 8000 });
+      try {
+        const response = await fetchWithCorsHandling(`${BLUESMINDS_BASE_URL}/chat/completions`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
           body,
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Bluesminds API Error for key index ${index}:`, errorText);
+          throw new Error(`Bluesminds API request failed with status: ${response.status}`);
         }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Manus API Error for key index ${index}:`, errorText);
-        throw new Error(`Manus API request failed with status: ${response.status}`);
+        const data = await response.json();
+        return { content: data.choices[0].message.content, serverUsed: "first" };
+      } catch (err) {
+        console.warn(`Bluesminds key index ${index} failed:`, err);
+        lastError = err;
       }
-
-      const data = await response.json();
-      return { content: data.choices[0].message.content, serverUsed: "second" };
-    } catch (err) {
-      console.warn(`Manus key index ${index} failed:`, err);
-      lastError = err;
     }
-  }
+    return null;
+  };
+
+  // Helper: try Manus
+  const tryManus = async (): Promise<{ content: string; serverUsed: "first" | "second" | "third" } | null> => {
+    if (isManusDisabled) {
+      console.log("Manus is DISABLED by admin, skipping...");
+      return null;
+    }
+    const manusKeysToTry = manusKeys.length > 0 ? manusKeys : [persona === "doctor" ? DEFAULT_DOCTOR_API_KEY : DEFAULT_RAFIQ_API_KEY];
+    for (let index = 0; index < manusKeysToTry.length; index++) {
+      const apiKey = manusKeysToTry[index];
+      if (!apiKey) continue;
+      console.log(`Trying Manus API key index ${index} for ${persona}...`);
+      const body = JSON.stringify({ model: activeModelManus, messages, temperature: 0.8, max_tokens: 8000 });
+      try {
+        const response = await fetchWithCorsHandling(`${MANUS_BASE_URL}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body,
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Manus API Error for key index ${index}:`, errorText);
+          throw new Error(`Manus API request failed with status: ${response.status}`);
+        }
+        const data = await response.json();
+        return { content: data.choices[0].message.content, serverUsed: "second" };
+      } catch (err) {
+        console.warn(`Manus key index ${index} failed:`, err);
+        lastError = err;
+      }
+    }
+    return null;
+  };
+
+  // Try servers based on priority order
+  const firstTry = isManusFirst ? tryManus : tryBluesminds;
+  const secondTry = isManusFirst ? tryBluesminds : tryManus;
+
+  const result1 = await firstTry();
+  if (result1) return result1;
+
+  console.log("First server failed or disabled, trying second...");
+  const result2 = await secondTry();
+  if (result2) return result2;
 
   // 3. Fallback to Puter.js if both fail
   console.warn("Primary and secondary APIs failed, falling back to Puter.js", lastError);

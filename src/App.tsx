@@ -105,6 +105,9 @@ export default function App() {
   const [adminRafiqModel, setAdminRafiqModel] = useState("");
   const [adminPuterModel, setAdminPuterModel] = useState("");
 
+  const [adminServerDisabled, setAdminServerDisabled] = useState("");
+  const [adminServerPriority, setAdminServerPriority] = useState("bluesminds_first");
+
   const [bmDoctorModels, setBmDoctorModels] = useState<string[]>(["gemini-2.5-flash"]);
   const [bmRafiqModels, setBmRafiqModels] = useState<string[]>(["gemini-2.5-flash"]);
   const [manusDoctorModels, setManusDoctorModels] = useState<string[]>(["gemini-2.5-flash"]);
@@ -285,6 +288,12 @@ export default function App() {
       setAdminBmRafiqModel(bmRafiqModel);
       setAdminPuterModel(puterModel);
 
+      const serverDisabled = localStorage.getItem("admin_server_disabled") || "";
+      const serverPriority = localStorage.getItem("admin_server_priority") || "bluesminds_first";
+      setAdminServerDisabled(serverDisabled);
+      setAdminServerPriority(serverPriority);
+
+
       if (drModel && !manusDoctorModels.includes(drModel)) setManusDoctorModels(prev => [...prev, drModel]);
       if (rafiqModel && !manusRafiqModels.includes(rafiqModel)) setManusRafiqModels(prev => [...prev, rafiqModel]);
       if (bmDrModel && !bmDoctorModels.includes(bmDrModel)) setBmDoctorModels(prev => [...prev, bmDrModel]);
@@ -320,6 +329,10 @@ export default function App() {
     localStorage.setItem("admin_bluesminds_rafiq_model", adminBmRafiqModel.trim());
 
     localStorage.setItem("admin_puter_model", adminPuterModel.trim());
+
+    localStorage.setItem("admin_server_disabled", adminServerDisabled);
+    localStorage.setItem("admin_server_priority", adminServerPriority);
+
     
     alert("تم حفظ الإعدادات محلياً! جاري المزامنة السحابية لتحديثها لكافة زوار الموقع...");
     
@@ -340,6 +353,9 @@ export default function App() {
         { key: "bluesminds_rafiq_model", value: adminBmRafiqModel.trim() },
 
         { key: "puter_model", value: adminPuterModel.trim() },
+
+        { key: "server_disabled", value: adminServerDisabled },
+        { key: "server_priority", value: adminServerPriority },
       ];
 
       for (const item of config) {
@@ -371,6 +387,9 @@ export default function App() {
     localStorage.removeItem("admin_bluesminds_rafiq_model");
 
     localStorage.removeItem("admin_puter_model");
+
+    localStorage.removeItem("admin_server_disabled");
+    localStorage.removeItem("admin_server_priority");
     
     alert("تمت إعادة التعيين محلياً! جاري إزالة الإعدادات من السحابة لتعود لوضعها الافتراضي لكافة زوار الموقع...");
     
@@ -390,7 +409,10 @@ export default function App() {
         "bluesminds_doctor_model",
         "bluesminds_rafiq_model",
 
-        "puter_model"
+        "puter_model",
+
+        "server_disabled",
+        "server_priority"
       ];
       for (const k of keys) {
         await fetch(`/api/kv/${k}`, {
@@ -425,6 +447,9 @@ export default function App() {
           { local: "admin_bluesminds_rafiq_model", remote: "bluesminds_rafiq_model" },
 
           { local: "admin_puter_model", remote: "puter_model" },
+
+          { local: "admin_server_disabled", remote: "server_disabled" },
+          { local: "admin_server_priority", remote: "server_priority" },
         ];
         
         for (const k of keys) {
@@ -629,6 +654,67 @@ export default function App() {
           ) : (
             /* Settings Page */
             <div className="space-y-6 pt-2">
+
+              {/* Server Controls Section */}
+              <div className="p-4 rounded-2xl border space-y-5" style={{ background: P.bg, borderColor: P.border }}>
+                <h4 className="font-bold text-[14px]" style={{ color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}>🎛️ کۆنتڕۆڵی سێرڤەرەکان</h4>
+
+                {/* Server Disable Toggle */}
+                <div className="space-y-2">
+                  <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>کوژاندنەوەی سێرڤەر</label>
+                  <div className="flex rounded-xl overflow-hidden" style={{ border: `1px solid ${P.border}` }}>
+                    {([
+                      { value: "", label: "هیچ کام نەکوژێنە" },
+                      { value: "bluesminds", label: "Bluesminds بکوژێنە" },
+                      { value: "manus", label: "Manus بکوژێنە" },
+                    ] as const).map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setAdminServerDisabled(opt.value)}
+                        className="flex-1 py-2.5 text-[12px] font-bold cursor-pointer transition-all duration-200 hover:opacity-80"
+                        style={{
+                          background: adminServerDisabled === opt.value ? P.accent : "transparent",
+                          color: adminServerDisabled === opt.value ? "#fff" : P.text,
+                          fontFamily: "'Noto Kufi Arabic'",
+                          borderLeft: opt.value !== "" ? `1px solid ${P.border}` : "none",
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px]" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>کاتێک سێرڤەرێک بکوژێنیت، داواکاری API بۆ ئەو سێرڤەرە نانێردرێت و ڕاستەوخۆ دەچێتە سێرڤەری دواتر.</p>
+                </div>
+
+                {/* Server Priority Toggle */}
+                <div className="space-y-2">
+                  <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>ڕیزبەندی سێرڤەر</label>
+                  <div className="flex rounded-xl overflow-hidden" style={{ border: `1px solid ${P.border}` }}>
+                    {([
+                      { value: "bluesminds_first", label: "Bluesminds یەکەم" },
+                      { value: "manus_first", label: "Manus یەکەم" },
+                    ] as const).map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setAdminServerPriority(opt.value)}
+                        className="flex-1 py-2.5 text-[12px] font-bold cursor-pointer transition-all duration-200 hover:opacity-80"
+                        style={{
+                          background: adminServerPriority === opt.value ? P.accent : "transparent",
+                          color: adminServerPriority === opt.value ? "#fff" : P.text,
+                          fontFamily: "'Noto Kufi Arabic'",
+                          borderLeft: opt.value === "manus_first" ? `1px solid ${P.border}` : "none",
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px]" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>دیاری دەکات کام سێرڤەر یەکەم جار داواکاریەکان وەربگرێت. Puter هەمیشە وەک فریاکەوتنی کۆتایی دەمێنێتەوە.</p>
+                </div>
+              </div>
+
               {/* Bluesminds API Section */}
               <div className="p-4 rounded-2xl border space-y-4" style={{ background: P.bg, borderColor: P.border }}>
                 <h4 className="font-bold text-[14px]" style={{ color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}>🌿 سێرڤەری Bluesminds (سەرەکی)</h4>
