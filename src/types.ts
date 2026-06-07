@@ -4,6 +4,7 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   isPuterAuthPrompt?: boolean;
+  serverUsed?: "first" | "second" | "third";
 }
 
 declare global {

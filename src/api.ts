@@ -406,7 +406,7 @@ async function fetchWithCorsHandling(
 export async function sendMessage(
   conversationHistory: Message[],
   persona: "doctor" | "rafiq" = "doctor"
-): Promise<string> {
+): Promise<{ content: string; serverUsed: "first" | "second" | "third" }> {
   const messages: Message[] = [
     {
       role: "system",
@@ -458,7 +458,7 @@ export async function sendMessage(
       }
 
       const data = await response.json();
-      return data.choices[0].message.content;
+      return { content: data.choices[0].message.content, serverUsed: "first" };
     } catch (err) {
       console.warn(`Bluesminds key index ${index} failed:`, err);
       lastError = err;
@@ -500,7 +500,7 @@ export async function sendMessage(
       }
 
       const data = await response.json();
-      return data.choices[0].message.content;
+      return { content: data.choices[0].message.content, serverUsed: "second" };
     } catch (err) {
       console.warn(`Manus key index ${index} failed:`, err);
       lastError = err;
@@ -515,7 +515,8 @@ export async function sendMessage(
     }
     try {
       const response = await window.puter.ai.chat(messages, { model: config.puterModel });
-      return typeof response === "string" ? response : response.message?.content || JSON.stringify(response);
+      const content = typeof response === "string" ? response : response.message?.content || JSON.stringify(response);
+      return { content, serverUsed: "third" };
     } catch (puterErr) {
       console.error("Puter AI failed:", puterErr);
       throw puterErr;

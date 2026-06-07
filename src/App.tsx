@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { sendMessage, type Message } from "./api";
 import { useAppStore } from "./store";
+import KeyChipsInput from "./KeyChipsInput";
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -157,6 +158,20 @@ export default function App() {
       alert(`❌ فشل جلب الموديلات: ${e.message || e}`);
     } finally {
       loaderSetter(false);
+    }
+  };
+
+  const testApiKey = async (provider: 'bluesminds' | 'manus', apiKey: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const { fetchModels } = await import('./api');
+      const models = await fetchModels(provider, apiKey);
+      if (models && models.length > 0) {
+        return { success: true, message: `کلیلەکە چالاکە و کاردەکات! مۆدێلە بەردەستەکان: ${models.slice(0, 3).join(', ')}` };
+      }
+      return { success: true, message: "کلیلەکە پەیوەست بوو بەڵام مۆدێلی نەگەڕاندەوە." };
+    } catch (e: any) {
+      console.error(e);
+      return { success: false, message: `ئەم کلیلە کارناکات یان هەڵەیە. هەڵە: ${e.message || e}` };
     }
   };
 
@@ -480,8 +495,14 @@ export default function App() {
         ...activeConversation.messages.filter(m => !m.id.startsWith("welcome")).map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
         { role: "user" as const, content: t },
       ];
-      const res = await sendMessage(hist, currentPersona);
-      addMessage({ id: "a" + Date.now(), role: "assistant", content: res, timestamp: new Date() });
+      const { content, serverUsed } = await sendMessage(hist, currentPersona);
+      addMessage({ 
+        id: "a" + Date.now(), 
+        role: "assistant", 
+        content, 
+        timestamp: new Date(),
+        serverUsed
+      });
     } catch (err: any) {
       if (err.message === "PUTER_AUTH_REQUIRED") {
         addMessage({ 
@@ -525,11 +546,17 @@ export default function App() {
   if (currentPage === "admin") {
     return (
       <div 
-        className="min-h-screen w-screen overflow-y-auto flex items-center justify-center p-4 sm:p-8" 
+        className="w-screen flex items-start justify-center p-4 sm:p-8" 
         dir="rtl" 
         style={{ 
           background: P.bg, 
-          fontFamily: "'IBM Plex Sans Arabic', sans-serif" 
+          fontFamily: "'IBM Plex Sans Arabic', sans-serif",
+          minHeight: '100vh',
+          height: 'auto',
+          overflowY: 'auto',
+          position: 'fixed',
+          inset: 0,
+          zIndex: 100,
         }}
       >
         <div 
@@ -607,85 +634,63 @@ export default function App() {
                 <h4 className="font-bold text-[14px]" style={{ color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}>🌿 سێرڤەری Bluesminds (سەرەکی)</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Doctor Keys */}
-                  <div className="space-y-2">
-                    <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>کلیلەکانی دکتۆر (تا ١٠٠ کلیل، هەر دێڕێک کلیلێک)</label>
-                    <textarea
-                      value={adminBmDrKeysText}
-                      onChange={(e) => setAdminBmDrKeysText(e.target.value)}
-                      placeholder="لێرە کلیلەکان بنووسە (هەر کلیلێک لە دێڕێکی نوێ)..."
-                      rows={4}
-                      className="w-full px-4 py-2.5 rounded-xl text-[12px] font-medium outline-none transition-all resize-y"
-                      style={{ 
-                        background: P.card,
-                        border: `1px solid ${P.border}`,
-                        color: P.text,
-                        fontFamily: "monospace"
-                      }}
-                    />
-                  </div>
+                  <KeyChipsInput
+                    value={adminBmDrKeysText}
+                    onChange={setAdminBmDrKeysText}
+                    label="کلیلەکانی دکتۆر (تا ١٠٠ کلیل)"
+                    placeholder="مفتاح API جدید..."
+                    maxKeys={100}
+                    palette={P}
+                    dark={dark}
+                    onTestKey={(key) => testApiKey('bluesminds', key)}
+                  />
                   {/* Rafiq Keys */}
-                  <div className="space-y-2">
-                    <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>کلیلەکانی ڕەفیق (تا ١٠٠ کلیل، هەر دێڕێک کلیلێک)</label>
-                    <textarea
-                      value={adminBmRafiqKeysText}
-                      onChange={(e) => setAdminBmRafiqKeysText(e.target.value)}
-                      placeholder="لێرە کلیلەکان بنووسە (هەر کلیلێک لە دێڕێکی نوێ)..."
-                      rows={4}
-                      className="w-full px-4 py-2.5 rounded-xl text-[12px] font-medium outline-none transition-all resize-y"
-                      style={{ 
-                        background: P.card,
-                        border: `1px solid ${P.border}`,
-                        color: P.text,
-                        fontFamily: "monospace"
-                      }}
-                    />
-                  </div>
+                  <KeyChipsInput
+                    value={adminBmRafiqKeysText}
+                    onChange={setAdminBmRafiqKeysText}
+                    label="کلیلەکانی ڕەفیق (تا ١٠٠ کلیل)"
+                    placeholder="مفتاح API جدید..."
+                    maxKeys={100}
+                    palette={P}
+                    dark={dark}
+                    onTestKey={(key) => testApiKey('bluesminds', key)}
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Doctor Model */}
                   <div className="space-y-1.5">
                     <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مۆدێلی دکتۆر (Doctor Model)</label>
-                    <div className="flex gap-2">
-                      <select
-                        value={adminBmDrModel}
-                        onChange={(e) => setAdminBmDrModel(e.target.value)}
-                        className="flex-1 px-4 py-2 rounded-xl text-[13px] font-medium outline-none transition-all"
-                        style={{ background: P.card, border: `1px solid ${P.border}`, color: P.text }}
-                      >
-                        {bmDoctorModels.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                      <button
-                        onClick={() => fetchLatestModels('bluesminds', 'doctor')}
-                        disabled={fetchingBmDrModels}
-                        className="px-3 py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 disabled:opacity-50"
-                        style={{ fontFamily: "'Noto Kufi Arabic'" }}
-                      >
-                        {fetchingBmDrModels ? "جاری..." : "جلب مۆدێل"}
-                      </button>
-                    </div>
+                    <input 
+                      type="text"
+                      value={adminBmDrModel}
+                      onChange={(e) => setAdminBmDrModel(e.target.value)}
+                      placeholder="gemini-2.5-flash..."
+                      className="w-full px-4 py-2.5 rounded-xl text-[13px] font-medium outline-none transition-all"
+                      style={{ 
+                        background: P.card, 
+                        border: `1px solid ${P.border}`, 
+                        color: P.text,
+                        fontFamily: "monospace"
+                      }}
+                    />
                   </div>
                   {/* Rafiq Model */}
                   <div className="space-y-1.5">
                     <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مۆدێلی ڕەفیق (Rafiq Model)</label>
-                    <div className="flex gap-2">
-                      <select
-                        value={adminBmRafiqModel}
-                        onChange={(e) => setAdminBmRafiqModel(e.target.value)}
-                        className="flex-1 px-4 py-2 rounded-xl text-[13px] font-medium outline-none transition-all"
-                        style={{ background: P.card, border: `1px solid ${P.border}`, color: P.text }}
-                      >
-                        {bmRafiqModels.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                      <button
-                        onClick={() => fetchLatestModels('bluesminds', 'rafiq')}
-                        disabled={fetchingBmRafiqModels}
-                        className="px-3 py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 disabled:opacity-50"
-                        style={{ fontFamily: "'Noto Kufi Arabic'" }}
-                      >
-                        {fetchingBmRafiqModels ? "جاری..." : "جلب مۆدێل"}
-                      </button>
-                    </div>
+                    <input 
+                      type="text"
+                      value={adminBmRafiqModel}
+                      onChange={(e) => setAdminBmRafiqModel(e.target.value)}
+                      placeholder="gemini-2.5-flash..."
+                      className="w-full px-4 py-2.5 rounded-xl text-[13px] font-medium outline-none transition-all"
+                      style={{ 
+                        background: P.card, 
+                        border: `1px solid ${P.border}`, 
+                        color: P.text,
+                        fontFamily: "monospace"
+                      }}
+                    />
                   </div>
                 </div>
               </div>
@@ -695,85 +700,63 @@ export default function App() {
                 <h4 className="font-bold text-[14px]" style={{ color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}>🤖 سێرڤەری Manus (یەدەگ)</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Doctor Keys */}
-                  <div className="space-y-2">
-                    <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>کلیلەکانی دکتۆر (تا ١٠٠ کلیل، هەر دێڕێک کلیلێک)</label>
-                    <textarea
-                      value={adminDrKeysText}
-                      onChange={(e) => setAdminDrKeysText(e.target.value)}
-                      placeholder="لێرە کلیلەکان بنووسە (هەر کليلێک لە دێڕێکی نوێ)..."
-                      rows={4}
-                      className="w-full px-4 py-2.5 rounded-xl text-[12px] font-medium outline-none transition-all resize-y"
-                      style={{ 
-                        background: P.card,
-                        border: `1px solid ${P.border}`,
-                        color: P.text,
-                        fontFamily: "monospace"
-                      }}
-                    />
-                  </div>
+                  <KeyChipsInput
+                    value={adminDrKeysText}
+                    onChange={setAdminDrKeysText}
+                    label="کلیلەکانی دکتۆر (تا ١٠٠ کلیل)"
+                    placeholder="مفتاح API جدید..."
+                    maxKeys={100}
+                    palette={P}
+                    dark={dark}
+                    onTestKey={(key) => testApiKey('manus', key)}
+                  />
                   {/* Rafiq Keys */}
-                  <div className="space-y-2">
-                    <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>کلیلەکانی ڕەفیق (تا ١٠٠ کلیل، هەر دێڕێک کلیلێک)</label>
-                    <textarea
-                      value={adminRafiqKeysText}
-                      onChange={(e) => setAdminRafiqKeysText(e.target.value)}
-                      placeholder="لێرە کلیلەکان بنووسە (هەر کلیلێک لە دێڕێکی نوێ)..."
-                      rows={4}
-                      className="w-full px-4 py-2.5 rounded-xl text-[12px] font-medium outline-none transition-all resize-y"
-                      style={{ 
-                        background: P.card,
-                        border: `1px solid ${P.border}`,
-                        color: P.text,
-                        fontFamily: "monospace"
-                      }}
-                    />
-                  </div>
+                  <KeyChipsInput
+                    value={adminRafiqKeysText}
+                    onChange={setAdminRafiqKeysText}
+                    label="کلیلەکانی ڕەفیق (تا ١٠٠ کلیل)"
+                    placeholder="مفتاح API جدید..."
+                    maxKeys={100}
+                    palette={P}
+                    dark={dark}
+                    onTestKey={(key) => testApiKey('manus', key)}
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Doctor Model */}
                   <div className="space-y-1.5">
                     <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مۆدێلی دکتۆر (Doctor Model)</label>
-                    <div className="flex gap-2">
-                      <select
-                        value={adminDrModel}
-                        onChange={(e) => setAdminDrModel(e.target.value)}
-                        className="flex-1 px-4 py-2 rounded-xl text-[13px] font-medium outline-none transition-all"
-                        style={{ background: P.card, border: `1px solid ${P.border}`, color: P.text }}
-                      >
-                        {manusDoctorModels.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                      <button
-                        onClick={() => fetchLatestModels('manus', 'doctor')}
-                        disabled={fetchingManusDrModels}
-                        className="px-3 py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 disabled:opacity-50"
-                        style={{ fontFamily: "'Noto Kufi Arabic'" }}
-                      >
-                        {fetchingManusDrModels ? "جاری..." : "جلب مۆدێل"}
-                      </button>
-                    </div>
+                    <input 
+                      type="text"
+                      value={adminDrModel}
+                      onChange={(e) => setAdminDrModel(e.target.value)}
+                      placeholder="gemini-2.5-flash..."
+                      className="w-full px-4 py-2.5 rounded-xl text-[13px] font-medium outline-none transition-all"
+                      style={{ 
+                        background: P.card, 
+                        border: `1px solid ${P.border}`, 
+                        color: P.text,
+                        fontFamily: "monospace"
+                      }}
+                    />
                   </div>
                   {/* Rafiq Model */}
                   <div className="space-y-1.5">
                     <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مۆدێلی ڕەفیق (Rafiq Model)</label>
-                    <div className="flex gap-2">
-                      <select
-                        value={adminRafiqModel}
-                        onChange={(e) => setAdminRafiqModel(e.target.value)}
-                        className="flex-1 px-4 py-2 rounded-xl text-[13px] font-medium outline-none transition-all"
-                        style={{ background: P.card, border: `1px solid ${P.border}`, color: P.text }}
-                      >
-                        {manusRafiqModels.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                      <button
-                        onClick={() => fetchLatestModels('manus', 'rafiq')}
-                        disabled={fetchingManusRafiqModels}
-                        className="px-3 py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 disabled:opacity-50"
-                        style={{ fontFamily: "'Noto Kufi Arabic'" }}
-                      >
-                        {fetchingManusRafiqModels ? "جاری..." : "جلب مۆدێل"}
-                      </button>
-                    </div>
+                    <input 
+                      type="text"
+                      value={adminRafiqModel}
+                      onChange={(e) => setAdminRafiqModel(e.target.value)}
+                      placeholder="gemini-2.5-flash..."
+                      className="w-full px-4 py-2.5 rounded-xl text-[13px] font-medium outline-none transition-all"
+                      style={{ 
+                        background: P.card, 
+                        border: `1px solid ${P.border}`, 
+                        color: P.text,
+                        fontFamily: "monospace"
+                      }}
+                    />
                   </div>
                 </div>
               </div>
@@ -1088,7 +1071,17 @@ export default function App() {
                   style={{ animationDelay: `${Math.min(i * 0.05, 0.2)}s` }}
                 >
                   {msg.role === "assistant" ? (
-                    <BotMsg content={msg.content} t={fmtTime(msg.timestamp)} dark={dark} fSize={fSize} P={P} botName={botName} isDoctor={currentPersona === "doctor"} isPuterAuthPrompt={msg.isPuterAuthPrompt} />
+                    <BotMsg 
+                      content={msg.content} 
+                      t={fmtTime(msg.timestamp)} 
+                      dark={dark} 
+                      fSize={fSize} 
+                      P={P} 
+                      botName={botName} 
+                      isDoctor={currentPersona === "doctor"} 
+                      isPuterAuthPrompt={msg.isPuterAuthPrompt}
+                      serverUsed={msg.serverUsed}
+                    />
                   ) : (
                     <UserMsg content={msg.content} t={fmtTime(msg.timestamp)} dark={dark} fSize={fSize} P={P} />
                   )}
@@ -1344,9 +1337,10 @@ interface MsgProps {
   botName?: string;
   isDoctor?: boolean;
   isPuterAuthPrompt?: boolean;
+  serverUsed?: "first" | "second" | "third";
 }
 
-function BotMsg({ content, t, dark, fSize, P, botName, isDoctor, isPuterAuthPrompt }: MsgProps) {
+function BotMsg({ content, t, dark, fSize, P, botName, isDoctor, isPuterAuthPrompt, serverUsed }: MsgProps) {
   return (
     <div className="flex items-start gap-3 w-full">
       <BotAvatar size={36} isDoctor={isDoctor} />
@@ -1379,6 +1373,34 @@ function BotMsg({ content, t, dark, fSize, P, botName, isDoctor, isPuterAuthProm
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {content}
             </ReactMarkdown>
+            {serverUsed && (
+              <div 
+                className="pt-2 mt-2 border-t text-[9px] font-normal flex items-center justify-end gap-1.5 opacity-60"
+                style={{ 
+                  borderColor: P.border,
+                  color: serverUsed === "first" 
+                    ? "#22c55e" 
+                    : serverUsed === "second" 
+                    ? "#eab308" 
+                    : "#ef4444" 
+                }}
+              >
+                <span className="w-1 h-1 rounded-full animate-pulse" style={{ 
+                  background: serverUsed === "first" 
+                    ? "#22c55e" 
+                    : serverUsed === "second" 
+                    ? "#eab308" 
+                    : "#ef4444" 
+                }} />
+                <span style={{ fontFamily: "'Noto Kufi Arabic', sans-serif" }}>
+                  {serverUsed === "first" 
+                    ? "تمت الإجابة بواسطة: الخادم الأول (الرئيسي)" 
+                    : serverUsed === "second" 
+                    ? "تمت الإجابة بواسطة: الخادم الثاني (الاحتياطي)" 
+                    : "تمت الإجابة بواسطة: الخادم الثالث (الطوارئ)"}
+                </span>
+              </div>
+            )}
             {isPuterAuthPrompt && (
               <div className="pt-4 mt-4 border-t border-dashed flex justify-center" style={{ borderColor: P.border }}>
                 <button
