@@ -4,7 +4,12 @@ export const DEFAULT_RAFIQ_API_KEY = "sk-VUgfFKWUMeimyDihMFBJVj";
 export const DEFAULT_DOCTOR_MODEL = "gemini-2.5-flash";
 export const DEFAULT_RAFIQ_MODEL = "gemini-2.5-flash";
 
+export const DEFAULT_BLUESMINDS_API_KEY = "VFnpPZlpu0iFyQkJtHF7HNfjjmn5FXJd9K2BV";
+export const DEFAULT_BLUESMINDS_DOCTOR_MODEL = "gemini-2.5-flash";
+export const DEFAULT_BLUESMINDS_RAFIQ_MODEL = "gemini-2.5-flash";
+
 const MANUS_BASE_URL = "https://api.manus.im/api/llm-proxy/v1";
+const BLUESMINDS_BASE_URL = "https://api.bluesminds.com/v1";
 
 export function getApiConfig() {
   let drKeys: string[] = [];
@@ -42,9 +47,56 @@ export function getApiConfig() {
 
   const drModel = localStorage.getItem("admin_doctor_model") || DEFAULT_DOCTOR_MODEL;
   const rafiqModel = localStorage.getItem("admin_rafiq_model") || DEFAULT_RAFIQ_MODEL;
+
+  // Bluesminds configuration
+  let bmDrKeys: string[] = [];
+  let bmRafiqKeys: string[] = [];
+
+  try {
+    const bmDrSaved = localStorage.getItem("admin_bluesminds_doctor_keys");
+    if (bmDrSaved) {
+      const parsed = JSON.parse(bmDrSaved);
+      if (Array.isArray(parsed)) bmDrKeys = parsed;
+    }
+  } catch (e) {
+    console.error("Failed to parse Bluesminds doctor keys:", e);
+  }
+
+  try {
+    const bmRafiqSaved = localStorage.getItem("admin_bluesminds_rafiq_keys");
+    if (bmRafiqSaved) {
+      const parsed = JSON.parse(bmRafiqSaved);
+      if (Array.isArray(parsed)) bmRafiqKeys = parsed;
+    }
+  } catch (e) {
+    console.error("Failed to parse Bluesminds rafiq keys:", e);
+  }
+
+  if (bmDrKeys.length === 0) {
+    const oldKey = localStorage.getItem("admin_bluesminds_doctor_key") || DEFAULT_BLUESMINDS_API_KEY;
+    if (oldKey) bmDrKeys = [oldKey];
+  }
+  if (bmRafiqKeys.length === 0) {
+    const oldKey = localStorage.getItem("admin_bluesminds_rafiq_key") || DEFAULT_BLUESMINDS_API_KEY;
+    if (oldKey) bmRafiqKeys = [oldKey];
+  }
+
+  const bmDrModel = localStorage.getItem("admin_bluesminds_doctor_model") || DEFAULT_BLUESMINDS_DOCTOR_MODEL;
+  const bmRafiqModel = localStorage.getItem("admin_bluesminds_rafiq_model") || DEFAULT_BLUESMINDS_RAFIQ_MODEL;
+
   const puterModel = localStorage.getItem("admin_puter_model") || "gemini-3-flash-preview";
 
-  return { drKeys, rafiqKeys, drModel, rafiqModel, puterModel };
+  return { 
+    drKeys, 
+    rafiqKeys, 
+    drModel, 
+    rafiqModel, 
+    puterModel,
+    bmDrKeys,
+    bmRafiqKeys,
+    bmDrModel,
+    bmRafiqModel
+  };
 }
 
 // CORS proxy options to try
@@ -363,21 +415,66 @@ export async function sendMessage(
     ...conversationHistory.slice(-60),
   ];
 
-  const { drKeys, rafiqKeys, drModel, rafiqModel, puterModel } = getApiConfig();
-  const apiKeys = (persona === "doctor" ? drKeys : rafiqKeys).filter(k => k.trim() !== "");
-  const activeModel = persona === "doctor" ? drModel : rafiqModel;
+  const config = getApiConfig();
+  const activeModelBm = persona === "doctor" ? config.bmDrModel : config.bmRafiqModel;
+  const activeModelManus = persona === "doctor" ? config.drModel : config.rafiqModel;
 
-  // Use fallback defaults if no keys are found
-  const keysToTry = apiKeys.length > 0 ? apiKeys : [persona === "doctor" ? DEFAULT_DOCTOR_API_KEY : DEFAULT_RAFIQ_API_KEY];
+  const bmKeys = (persona === "doctor" ? config.bmDrKeys : config.bmRafiqKeys).filter(k => k.trim() !== "");
+  const manusKeys = (persona === "doctor" ? config.drKeys : config.rafiqKeys).filter(k => k.trim() !== "");
 
   let lastError: any = null;
 
-  for (let index = 0; index < keysToTry.length; index++) {
-    const apiKey = keysToTry[index];
-    console.log(`Trying API key index ${index} for ${persona}...`);
+  // 1. Try Bluesminds keys first
+  const bmKeysToTry = bmKeys.length > 0 ? bmKeys : [DEFAULT_BLUESMINDS_API_KEY];
+  for (let index = 0; index < bmKeysToTry.length; index++) {
+    const apiKey = bmKeysToTry[index];
+    if (!apiKey) continue;
+    console.log(`Trying Bluesminds API key index ${index} for ${persona}...`);
 
     const body = JSON.stringify({
-      model: activeModel,
+      model: activeModelBm,
+      messages,
+      temperature: 0.8,
+      max_tokens: 8000,
+    });
+
+    try {
+      const response = await fetchWithCorsHandling(
+        `${BLUESMINDS_BASE_URL}/chat/completions`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body,
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Bluesminds API Error for key index ${index}:`, errorText);
+        throw new Error(`Bluesminds API request failed with status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.choices[0].message.content;
+    } catch (err) {
+      console.warn(`Bluesminds key index ${index} failed:`, err);
+      lastError = err;
+    }
+  }
+
+  // 2. Try Manus keys if Bluesminds fails
+  console.log("Bluesminds failed or not configured, trying Manus...");
+  const manusKeysToTry = manusKeys.length > 0 ? manusKeys : [persona === "doctor" ? DEFAULT_DOCTOR_API_KEY : DEFAULT_RAFIQ_API_KEY];
+  for (let index = 0; index < manusKeysToTry.length; index++) {
+    const apiKey = manusKeysToTry[index];
+    if (!apiKey) continue;
+    console.log(`Trying Manus API key index ${index} for ${persona}...`);
+
+    const body = JSON.stringify({
+      model: activeModelManus,
       messages,
       temperature: 0.8,
       max_tokens: 8000,
@@ -398,32 +495,60 @@ export async function sendMessage(
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`API Error for key index ${index}:`, errorText);
-        throw new Error(`API request failed with status: ${response.status}`);
+        console.error(`Manus API Error for key index ${index}:`, errorText);
+        throw new Error(`Manus API request failed with status: ${response.status}`);
       }
 
       const data = await response.json();
       return data.choices[0].message.content;
     } catch (err) {
-      console.warn(`Key index ${index} failed:`, err);
+      console.warn(`Manus key index ${index} failed:`, err);
       lastError = err;
-      // Continue loop to try the next key
     }
   }
 
-  // All keys failed, try emergency fallback to Puter.js
-  console.warn("Primary API failed, falling back to Puter.js", lastError);
+  // 3. Fallback to Puter.js if both fail
+  console.warn("Primary and secondary APIs failed, falling back to Puter.js", lastError);
   if (window.puter) {
     if (!window.puter.auth.isSignedIn()) {
       throw new Error("PUTER_AUTH_REQUIRED");
     }
     try {
-      const response = await window.puter.ai.chat(messages, { model: puterModel });
+      const response = await window.puter.ai.chat(messages, { model: config.puterModel });
       return typeof response === "string" ? response : response.message?.content || JSON.stringify(response);
     } catch (puterErr) {
       console.error("Puter AI failed:", puterErr);
       throw puterErr;
     }
   }
+
   throw lastError || new Error("All API keys failed");
 }
+
+export async function fetchModels(provider: 'bluesminds' | 'manus', apiKey: string): Promise<string[]> {
+  const baseUrl = provider === 'bluesminds' ? BLUESMINDS_BASE_URL : MANUS_BASE_URL;
+  const url = `${baseUrl}/models`;
+  
+  const options = {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+    }
+  };
+
+  try {
+    const response = await fetchWithCorsHandling(url, options);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch models: ${response.status}`);
+    }
+    const data = await response.json();
+    if (data && Array.isArray(data.data)) {
+      return data.data.map((m: any) => m.id);
+    }
+    return [];
+  } catch (error) {
+    console.error(`Error fetching models for ${provider}:`, error);
+    throw error;
+  }
+}
+

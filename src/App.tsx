@@ -93,11 +93,72 @@ export default function App() {
   const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
   const [adminError, setAdminError] = useState("");
 
-  const [adminDrKeys, setAdminDrKeys] = useState<string[]>(() => Array(10).fill(""));
-  const [adminRafiqKeys, setAdminRafiqKeys] = useState<string[]>(() => Array(10).fill(""));
+  const [adminBmDrKeysText, setAdminBmDrKeysText] = useState("");
+  const [adminBmRafiqKeysText, setAdminBmRafiqKeysText] = useState("");
+  const [adminDrKeysText, setAdminDrKeysText] = useState("");
+  const [adminRafiqKeysText, setAdminRafiqKeysText] = useState("");
+
+  const [adminBmDrModel, setAdminBmDrModel] = useState("");
+  const [adminBmRafiqModel, setAdminBmRafiqModel] = useState("");
   const [adminDrModel, setAdminDrModel] = useState("");
   const [adminRafiqModel, setAdminRafiqModel] = useState("");
   const [adminPuterModel, setAdminPuterModel] = useState("");
+
+  const [bmDoctorModels, setBmDoctorModels] = useState<string[]>(["gemini-2.5-flash"]);
+  const [bmRafiqModels, setBmRafiqModels] = useState<string[]>(["gemini-2.5-flash"]);
+  const [manusDoctorModels, setManusDoctorModels] = useState<string[]>(["gemini-2.5-flash"]);
+  const [manusRafiqModels, setManusRafiqModels] = useState<string[]>(["gemini-2.5-flash"]);
+
+  const [fetchingBmDrModels, setFetchingBmDrModels] = useState(false);
+  const [fetchingBmRafiqModels, setFetchingBmRafiqModels] = useState(false);
+  const [fetchingManusDrModels, setFetchingManusDrModels] = useState(false);
+  const [fetchingManusRafiqModels, setFetchingManusRafiqModels] = useState(false);
+
+  const fetchLatestModels = async (provider: 'bluesminds' | 'manus', persona: 'doctor' | 'rafiq') => {
+    const keysText = provider === 'bluesminds' 
+      ? (persona === 'doctor' ? adminBmDrKeysText : adminBmRafiqKeysText)
+      : (persona === 'doctor' ? adminDrKeysText : adminRafiqKeysText);
+    
+    const keys = keysText.split('\n').map(k => k.trim()).filter(k => k !== "");
+    const primaryKey = keys[0] || (provider === 'bluesminds' ? "VFnpPZlpu0iFyQkJtHF7HNfjjmn5FXJd9K2BV" : (persona === 'doctor' ? "sk-hLwMhHmK84UppzziebKMn5" : "sk-VUgfFKWUMeimyDihMFBJVj"));
+
+    const setter = provider === 'bluesminds'
+      ? (persona === 'doctor' ? setBmDoctorModels : setBmRafiqModels)
+      : (persona === 'doctor' ? setManusDoctorModels : setManusRafiqModels);
+
+    const loaderSetter = provider === 'bluesminds'
+      ? (persona === 'doctor' ? setFetchingBmDrModels : setFetchingBmRafiqModels)
+      : (persona === 'doctor' ? setFetchingManusDrModels : setFetchingManusRafiqModels);
+
+    loaderSetter(true);
+    try {
+      const { fetchModels } = await import('./api');
+      const models = await fetchModels(provider, primaryKey);
+      if (models.length > 0) {
+        setter(models);
+        
+        const currentModel = provider === 'bluesminds'
+          ? (persona === 'doctor' ? adminBmDrModel : adminBmRafiqModel)
+          : (persona === 'doctor' ? adminDrModel : adminRafiqModel);
+        
+        const modelSetter = provider === 'bluesminds'
+          ? (persona === 'doctor' ? setAdminBmDrModel : setAdminBmRafiqModel)
+          : (persona === 'doctor' ? setAdminDrModel : setAdminRafiqModel);
+
+        if (!models.includes(currentModel)) {
+          modelSetter(models[0]);
+        }
+        alert("🚀 تم جلب الموديلات بنجاح!");
+      } else {
+        alert("⚠️ لم يتم العثور على موديلات.");
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert(`❌ فشل جلب الموديلات: ${e.message || e}`);
+    } finally {
+      loaderSetter(false);
+    }
+  };
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,57 +209,86 @@ export default function App() {
       
       const drSaved = localStorage.getItem("admin_doctor_api_keys");
       const rafiqSaved = localStorage.getItem("admin_rafiq_api_keys");
+      const bmDrSaved = localStorage.getItem("admin_bluesminds_doctor_keys");
+      const bmRafiqSaved = localStorage.getItem("admin_bluesminds_rafiq_keys");
       
-      let drKeysList: string[] = Array(10).fill("");
-      let rafiqKeysList: string[] = Array(10).fill("");
+      let drKeysTextVal = "";
+      let rafiqKeysTextVal = "";
+      let bmDrKeysTextVal = "";
+      let bmRafiqKeysTextVal = "";
       
       try {
         if (drSaved) {
           const parsed = JSON.parse(drSaved);
-          if (Array.isArray(parsed)) {
-            drKeysList = [...parsed, ...Array(10).fill("")].slice(0, 10);
-          }
+          if (Array.isArray(parsed)) drKeysTextVal = parsed.join('\n');
         } else {
-          // fallback to single key
-          const single = localStorage.getItem("admin_doctor_api_key") || "sk-hLwMhHmK84UppzziebKMn5";
-          drKeysList = [single, ...Array(9).fill("")];
+          drKeysTextVal = localStorage.getItem("admin_doctor_api_key") || "sk-hLwMhHmK84UppzziebKMn5";
         }
       } catch {}
 
       try {
         if (rafiqSaved) {
           const parsed = JSON.parse(rafiqSaved);
-          if (Array.isArray(parsed)) {
-            rafiqKeysList = [...parsed, ...Array(10).fill("")].slice(0, 10);
-          }
+          if (Array.isArray(parsed)) rafiqKeysTextVal = parsed.join('\n');
         } else {
-          // fallback to single key
-          const single = localStorage.getItem("admin_rafiq_api_key") || "sk-VUgfFKWUMeimyDihMFBJVj";
-          rafiqKeysList = [single, ...Array(9).fill("")];
+          rafiqKeysTextVal = localStorage.getItem("admin_rafiq_api_key") || "sk-VUgfFKWUMeimyDihMFBJVj";
+        }
+      } catch {}
+
+      try {
+        if (bmDrSaved) {
+          const parsed = JSON.parse(bmDrSaved);
+          if (Array.isArray(parsed)) bmDrKeysTextVal = parsed.join('\n');
+        } else {
+          bmDrKeysTextVal = localStorage.getItem("admin_bluesminds_doctor_key") || "VFnpPZlpu0iFyQkJtHF7HNfjjmn5FXJd9K2BV";
+        }
+      } catch {}
+
+      try {
+        if (bmRafiqSaved) {
+          const parsed = JSON.parse(bmRafiqSaved);
+          if (Array.isArray(parsed)) bmRafiqKeysTextVal = parsed.join('\n');
+        } else {
+          bmRafiqKeysTextVal = localStorage.getItem("admin_bluesminds_rafiq_key") || "VFnpPZlpu0iFyQkJtHF7HNfjjmn5FXJd9K2BV";
         }
       } catch {}
       
-      setAdminDrKeys(drKeysList);
-      setAdminRafiqKeys(rafiqKeysList);
+      setAdminDrKeysText(drKeysTextVal);
+      setAdminRafiqKeysText(rafiqKeysTextVal);
+      setAdminBmDrKeysText(bmDrKeysTextVal);
+      setAdminBmRafiqKeysText(bmRafiqKeysTextVal);
       
       const drModel = localStorage.getItem("admin_doctor_model") || "gemini-2.5-flash";
       const rafiqModel = localStorage.getItem("admin_rafiq_model") || "gemini-2.5-flash";
+      const bmDrModel = localStorage.getItem("admin_bluesminds_doctor_model") || "gemini-2.5-flash";
+      const bmRafiqModel = localStorage.getItem("admin_bluesminds_rafiq_model") || "gemini-2.5-flash";
       const puterModel = localStorage.getItem("admin_puter_model") || "gemini-3-flash-preview";
       
       setAdminDrModel(drModel);
       setAdminRafiqModel(rafiqModel);
+      setAdminBmDrModel(bmDrModel);
+      setAdminBmRafiqModel(bmRafiqModel);
       setAdminPuterModel(puterModel);
+
+      if (drModel && !manusDoctorModels.includes(drModel)) setManusDoctorModels(prev => [...prev, drModel]);
+      if (rafiqModel && !manusRafiqModels.includes(rafiqModel)) setManusRafiqModels(prev => [...prev, rafiqModel]);
+      if (bmDrModel && !bmDoctorModels.includes(bmDrModel)) setBmDoctorModels(prev => [...prev, bmDrModel]);
+      if (bmRafiqModel && !bmRafiqModels.includes(bmRafiqModel)) setBmRafiqModels(prev => [...prev, bmRafiqModel]);
     } else {
       setAdminError("رمز المرور غير صحيح! حاول مرة أخرى.");
     }
   };
 
   const handleSaveAdminSettings = async () => {
-    const cleanedDrKeys = adminDrKeys.map(k => k.trim()).filter(k => k !== "");
-    const cleanedRafiqKeys = adminRafiqKeys.map(k => k.trim()).filter(k => k !== "");
+    const cleanedDrKeys = adminDrKeysText.split('\n').map(k => k.trim()).filter(k => k !== "");
+    const cleanedRafiqKeys = adminRafiqKeysText.split('\n').map(k => k.trim()).filter(k => k !== "");
+    const cleanedBmDrKeys = adminBmDrKeysText.split('\n').map(k => k.trim()).filter(k => k !== "");
+    const cleanedBmRafiqKeys = adminBmRafiqKeysText.split('\n').map(k => k.trim()).filter(k => k !== "");
 
     if (cleanedDrKeys.length === 0) cleanedDrKeys.push("");
     if (cleanedRafiqKeys.length === 0) cleanedRafiqKeys.push("");
+    if (cleanedBmDrKeys.length === 0) cleanedBmDrKeys.push("");
+    if (cleanedBmRafiqKeys.length === 0) cleanedBmRafiqKeys.push("");
 
     localStorage.setItem("admin_doctor_api_keys", JSON.stringify(cleanedDrKeys));
     localStorage.setItem("admin_rafiq_api_keys", JSON.stringify(cleanedRafiqKeys));
@@ -206,6 +296,14 @@ export default function App() {
     localStorage.setItem("admin_rafiq_api_key", cleanedRafiqKeys[0] || "");
     localStorage.setItem("admin_doctor_model", adminDrModel.trim());
     localStorage.setItem("admin_rafiq_model", adminRafiqModel.trim());
+
+    localStorage.setItem("admin_bluesminds_doctor_keys", JSON.stringify(cleanedBmDrKeys));
+    localStorage.setItem("admin_bluesminds_rafiq_keys", JSON.stringify(cleanedBmRafiqKeys));
+    localStorage.setItem("admin_bluesminds_doctor_key", cleanedBmDrKeys[0] || "");
+    localStorage.setItem("admin_bluesminds_rafiq_key", cleanedBmRafiqKeys[0] || "");
+    localStorage.setItem("admin_bluesminds_doctor_model", adminBmDrModel.trim());
+    localStorage.setItem("admin_bluesminds_rafiq_model", adminBmRafiqModel.trim());
+
     localStorage.setItem("admin_puter_model", adminPuterModel.trim());
     
     alert("تم حفظ الإعدادات محلياً! جاري المزامنة السحابية لتحديثها لكافة زوار الموقع...");
@@ -218,6 +316,14 @@ export default function App() {
         { key: "rafiq_api_key", value: cleanedRafiqKeys[0] || "" },
         { key: "doctor_model", value: adminDrModel.trim() },
         { key: "rafiq_model", value: adminRafiqModel.trim() },
+
+        { key: "bluesminds_doctor_keys", value: JSON.stringify(cleanedBmDrKeys) },
+        { key: "bluesminds_rafiq_keys", value: JSON.stringify(cleanedBmRafiqKeys) },
+        { key: "bluesminds_doctor_key", value: cleanedBmDrKeys[0] || "" },
+        { key: "bluesminds_rafiq_key", value: cleanedBmRafiqKeys[0] || "" },
+        { key: "bluesminds_doctor_model", value: adminBmDrModel.trim() },
+        { key: "bluesminds_rafiq_model", value: adminBmRafiqModel.trim() },
+
         { key: "puter_model", value: adminPuterModel.trim() },
       ];
 
@@ -241,6 +347,14 @@ export default function App() {
     localStorage.removeItem("admin_rafiq_api_keys");
     localStorage.removeItem("admin_doctor_model");
     localStorage.removeItem("admin_rafiq_model");
+
+    localStorage.removeItem("admin_bluesminds_doctor_key");
+    localStorage.removeItem("admin_bluesminds_rafiq_key");
+    localStorage.removeItem("admin_bluesminds_doctor_keys");
+    localStorage.removeItem("admin_bluesminds_rafiq_keys");
+    localStorage.removeItem("admin_bluesminds_doctor_model");
+    localStorage.removeItem("admin_bluesminds_rafiq_model");
+
     localStorage.removeItem("admin_puter_model");
     
     alert("تمت إعادة التعيين محلياً! جاري إزالة الإعدادات من السحابة لتعود لوضعها الافتراضي لكافة زوار الموقع...");
@@ -252,7 +366,15 @@ export default function App() {
         "doctor_api_keys", 
         "rafiq_api_keys", 
         "doctor_model", 
-        "rafiq_model", 
+        "rafiq_model",
+
+        "bluesminds_doctor_key",
+        "bluesminds_rafiq_key",
+        "bluesminds_doctor_keys",
+        "bluesminds_rafiq_keys",
+        "bluesminds_doctor_model",
+        "bluesminds_rafiq_model",
+
         "puter_model"
       ];
       for (const k of keys) {
@@ -279,6 +401,14 @@ export default function App() {
           { local: "admin_rafiq_api_keys", remote: "rafiq_api_keys" },
           { local: "admin_doctor_model", remote: "doctor_model" },
           { local: "admin_rafiq_model", remote: "rafiq_model" },
+
+          { local: "admin_bluesminds_doctor_key", remote: "bluesminds_doctor_key" },
+          { local: "admin_bluesminds_rafiq_key", remote: "bluesminds_rafiq_key" },
+          { local: "admin_bluesminds_doctor_keys", remote: "bluesminds_doctor_keys" },
+          { local: "admin_bluesminds_rafiq_keys", remote: "bluesminds_rafiq_keys" },
+          { local: "admin_bluesminds_doctor_model", remote: "bluesminds_doctor_model" },
+          { local: "admin_bluesminds_rafiq_model", remote: "bluesminds_rafiq_model" },
+
           { local: "admin_puter_model", remote: "puter_model" },
         ];
         
@@ -471,118 +601,200 @@ export default function App() {
             </form>
           ) : (
             /* Settings Page */
-            <div className="space-y-4 pt-2">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Doctor Keys */}
-                <div className="space-y-2.5">
-                  <label className="text-[12px] font-bold" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مفاتيح API لدكتور التعافي (١ إلى ١٠)</label>
-                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
-                    {adminDrKeys.map((key, index) => (
-                      <input 
-                        key={index}
-                        type="text"
-                        value={key}
-                        onChange={(e) => {
-                          const next = [...adminDrKeys];
-                          next[index] = e.target.value;
-                          setAdminDrKeys(next);
-                        }}
-                        placeholder={`المفتاح #${index + 1}`}
-                        className="w-full px-4 py-2.5 rounded-xl text-[12px] font-medium outline-none transition-all"
-                        style={{ 
-                          background: P.bg,
-                          border: `1px solid ${P.border}`,
-                          color: P.text,
-                          fontFamily: "monospace"
-                        }}
-                      />
-                    ))}
+            <div className="space-y-6 pt-2">
+              {/* Bluesminds API Section */}
+              <div className="p-4 rounded-2xl border space-y-4" style={{ background: P.bg, borderColor: P.border }}>
+                <h4 className="font-bold text-[14px]" style={{ color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}>🌿 سێرڤەری Bluesminds (سەرەکی)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Doctor Keys */}
+                  <div className="space-y-2">
+                    <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>کلیلەکانی دکتۆر (تا ١٠٠ کلیل، هەر دێڕێک کلیلێک)</label>
+                    <textarea
+                      value={adminBmDrKeysText}
+                      onChange={(e) => setAdminBmDrKeysText(e.target.value)}
+                      placeholder="لێرە کلیلەکان بنووسە (هەر کلیلێک لە دێڕێکی نوێ)..."
+                      rows={4}
+                      className="w-full px-4 py-2.5 rounded-xl text-[12px] font-medium outline-none transition-all resize-y"
+                      style={{ 
+                        background: P.card,
+                        border: `1px solid ${P.border}`,
+                        color: P.text,
+                        fontFamily: "monospace"
+                      }}
+                    />
+                  </div>
+                  {/* Rafiq Keys */}
+                  <div className="space-y-2">
+                    <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>کلیلەکانی ڕەفیق (تا ١٠٠ کلیل، هەر دێڕێک کلیلێک)</label>
+                    <textarea
+                      value={adminBmRafiqKeysText}
+                      onChange={(e) => setAdminBmRafiqKeysText(e.target.value)}
+                      placeholder="لێرە کلیلەکان بنووسە (هەر کلیلێک لە دێڕێکی نوێ)..."
+                      rows={4}
+                      className="w-full px-4 py-2.5 rounded-xl text-[12px] font-medium outline-none transition-all resize-y"
+                      style={{ 
+                        background: P.card,
+                        border: `1px solid ${P.border}`,
+                        color: P.text,
+                        fontFamily: "monospace"
+                      }}
+                    />
                   </div>
                 </div>
 
-                {/* Rafiq Keys */}
-                <div className="space-y-2.5">
-                  <label className="text-[12px] font-bold" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مفاتيح API لرفيق التعافي (١ إلى ١٠)</label>
-                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
-                    {adminRafiqKeys.map((key, index) => (
-                      <input 
-                        key={index}
-                        type="text"
-                        value={key}
-                        onChange={(e) => {
-                          const next = [...adminRafiqKeys];
-                          next[index] = e.target.value;
-                          setAdminRafiqKeys(next);
-                        }}
-                        placeholder={`المفتاح #${index + 1}`}
-                        className="w-full px-4 py-2.5 rounded-xl text-[12px] font-medium outline-none transition-all"
-                        style={{ 
-                          background: P.bg,
-                          border: `1px solid ${P.border}`,
-                          color: P.text,
-                          fontFamily: "monospace"
-                        }}
-                      />
-                    ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Doctor Model */}
+                  <div className="space-y-1.5">
+                    <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مۆدێلی دکتۆر (Doctor Model)</label>
+                    <div className="flex gap-2">
+                      <select
+                        value={adminBmDrModel}
+                        onChange={(e) => setAdminBmDrModel(e.target.value)}
+                        className="flex-1 px-4 py-2 rounded-xl text-[13px] font-medium outline-none transition-all"
+                        style={{ background: P.card, border: `1px solid ${P.border}`, color: P.text }}
+                      >
+                        {bmDoctorModels.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                      <button
+                        onClick={() => fetchLatestModels('bluesminds', 'doctor')}
+                        disabled={fetchingBmDrModels}
+                        className="px-3 py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 disabled:opacity-50"
+                        style={{ fontFamily: "'Noto Kufi Arabic'" }}
+                      >
+                        {fetchingBmDrModels ? "جاری..." : "جلب مۆدێل"}
+                      </button>
+                    </div>
+                  </div>
+                  {/* Rafiq Model */}
+                  <div className="space-y-1.5">
+                    <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مۆدێلی ڕەفیق (Rafiq Model)</label>
+                    <div className="flex gap-2">
+                      <select
+                        value={adminBmRafiqModel}
+                        onChange={(e) => setAdminBmRafiqModel(e.target.value)}
+                        className="flex-1 px-4 py-2 rounded-xl text-[13px] font-medium outline-none transition-all"
+                        style={{ background: P.card, border: `1px solid ${P.border}`, color: P.text }}
+                      >
+                        {bmRafiqModels.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                      <button
+                        onClick={() => fetchLatestModels('bluesminds', 'rafiq')}
+                        disabled={fetchingBmRafiqModels}
+                        className="px-3 py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 disabled:opacity-50"
+                        style={{ fontFamily: "'Noto Kufi Arabic'" }}
+                      >
+                        {fetchingBmRafiqModels ? "جاری..." : "جلب مۆدێل"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Doctor Model */}
-                <div className="space-y-1.5">
-                  <label className="text-[12px] font-bold" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>موديل دكتور التعافي (Doctor Model)</label>
-                  <input 
-                    type="text"
-                    value={adminDrModel}
-                    onChange={(e) => setAdminDrModel(e.target.value)}
-                    placeholder="gemini-2.5-flash..."
-                    className="w-full px-4 py-3 rounded-2xl text-[13px] font-medium outline-none transition-all"
-                    style={{ 
-                      background: P.bg,
-                      border: `1px solid ${P.border}`,
-                      color: P.text,
-                      fontFamily: "monospace"
-                    }}
-                  />
+              {/* Manus API Section */}
+              <div className="p-4 rounded-2xl border space-y-4" style={{ background: P.bg, borderColor: P.border }}>
+                <h4 className="font-bold text-[14px]" style={{ color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}>🤖 سێرڤەری Manus (یەدەگ)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Doctor Keys */}
+                  <div className="space-y-2">
+                    <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>کلیلەکانی دکتۆر (تا ١٠٠ کلیل، هەر دێڕێک کلیلێک)</label>
+                    <textarea
+                      value={adminDrKeysText}
+                      onChange={(e) => setAdminDrKeysText(e.target.value)}
+                      placeholder="لێرە کلیلەکان بنووسە (هەر کليلێک لە دێڕێکی نوێ)..."
+                      rows={4}
+                      className="w-full px-4 py-2.5 rounded-xl text-[12px] font-medium outline-none transition-all resize-y"
+                      style={{ 
+                        background: P.card,
+                        border: `1px solid ${P.border}`,
+                        color: P.text,
+                        fontFamily: "monospace"
+                      }}
+                    />
+                  </div>
+                  {/* Rafiq Keys */}
+                  <div className="space-y-2">
+                    <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>کلیلەکانی ڕەفیق (تا ١٠٠ کلیل، هەر دێڕێک کلیلێک)</label>
+                    <textarea
+                      value={adminRafiqKeysText}
+                      onChange={(e) => setAdminRafiqKeysText(e.target.value)}
+                      placeholder="لێرە کلیلەکان بنووسە (هەر کلیلێک لە دێڕێکی نوێ)..."
+                      rows={4}
+                      className="w-full px-4 py-2.5 rounded-xl text-[12px] font-medium outline-none transition-all resize-y"
+                      style={{ 
+                        background: P.card,
+                        border: `1px solid ${P.border}`,
+                        color: P.text,
+                        fontFamily: "monospace"
+                      }}
+                    />
+                  </div>
                 </div>
 
-                {/* Rafiq Model */}
-                <div className="space-y-1.5">
-                  <label className="text-[12px] font-bold" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>موديل رفيق التعافي (Rafiq Model)</label>
-                  <input 
-                    type="text"
-                    value={adminRafiqModel}
-                    onChange={(e) => setAdminRafiqModel(e.target.value)}
-                    placeholder="gemini-2.5-flash..."
-                    className="w-full px-4 py-3 rounded-2xl text-[13px] font-medium outline-none transition-all"
-                    style={{ 
-                      background: P.bg,
-                      border: `1px solid ${P.border}`,
-                      color: P.text,
-                      fontFamily: "monospace"
-                    }}
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Doctor Model */}
+                  <div className="space-y-1.5">
+                    <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مۆدێلی دکتۆر (Doctor Model)</label>
+                    <div className="flex gap-2">
+                      <select
+                        value={adminDrModel}
+                        onChange={(e) => setAdminDrModel(e.target.value)}
+                        className="flex-1 px-4 py-2 rounded-xl text-[13px] font-medium outline-none transition-all"
+                        style={{ background: P.card, border: `1px solid ${P.border}`, color: P.text }}
+                      >
+                        {manusDoctorModels.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                      <button
+                        onClick={() => fetchLatestModels('manus', 'doctor')}
+                        disabled={fetchingManusDrModels}
+                        className="px-3 py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 disabled:opacity-50"
+                        style={{ fontFamily: "'Noto Kufi Arabic'" }}
+                      >
+                        {fetchingManusDrModels ? "جاری..." : "جلب مۆدێل"}
+                      </button>
+                    </div>
+                  </div>
+                  {/* Rafiq Model */}
+                  <div className="space-y-1.5">
+                    <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مۆدێلی ڕەفیق (Rafiq Model)</label>
+                    <div className="flex gap-2">
+                      <select
+                        value={adminRafiqModel}
+                        onChange={(e) => setAdminRafiqModel(e.target.value)}
+                        className="flex-1 px-4 py-2 rounded-xl text-[13px] font-medium outline-none transition-all"
+                        style={{ background: P.card, border: `1px solid ${P.border}`, color: P.text }}
+                      >
+                        {manusRafiqModels.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                      <button
+                        onClick={() => fetchLatestModels('manus', 'rafiq')}
+                        disabled={fetchingManusRafiqModels}
+                        className="px-3 py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 disabled:opacity-50"
+                        style={{ fontFamily: "'Noto Kufi Arabic'" }}
+                      >
+                        {fetchingManusRafiqModels ? "جاری..." : "جلب مۆدێل"}
+                      </button>
+                    </div>
+                  </div>
                 </div>
+              </div>
 
-                {/* Puter Model */}
-                <div className="space-y-1.5 pt-2 mt-2 border-t" style={{ borderColor: P.border }}>
-                  <label className="text-[12px] font-bold" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>موديل خادم الطوارئ (Puter Fallback)</label>
-                  <input 
-                    type="text"
-                    value={adminPuterModel}
-                    onChange={(e) => setAdminPuterModel(e.target.value)}
-                    placeholder="gemini-3-flash-preview..."
-                    className="w-full px-4 py-3 rounded-2xl text-[13px] font-medium outline-none transition-all"
-                    style={{ 
-                      background: P.bg,
-                      border: `1px solid ${P.border}`,
-                      color: P.text,
-                      fontFamily: "monospace"
-                    }}
-                  />
-                  <p className="text-[10px]" style={{ color: P.text2 }}>يتم استخدامه تلقائياً كخادم احتياطي مجاني في حال توقف الخادم الأساسي.</p>
-                </div>
+              {/* Puter Fallback */}
+              <div className="space-y-1.5 pt-2 mt-2 border-t" style={{ borderColor: P.border }}>
+                <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>موديل خادم الطوارئ (Puter Fallback)</label>
+                <input 
+                  type="text"
+                  value={adminPuterModel}
+                  onChange={(e) => setAdminPuterModel(e.target.value)}
+                  placeholder="gemini-3-flash-preview..."
+                  className="w-full px-4 py-3 rounded-2xl text-[13px] font-medium outline-none transition-all"
+                  style={{ 
+                    background: P.bg,
+                    border: `1px solid ${P.border}`,
+                    color: P.text,
+                    fontFamily: "monospace"
+                  }}
+                />
+                <p className="text-[10px]" style={{ color: P.text2 }}>یەکەم و دووەم گەر کار نەکەن، ئەمە بەکاردێت وەک سێرڤەری یەدەگی فریاکەوتن.</p>
               </div>
 
               {/* Actions */}
