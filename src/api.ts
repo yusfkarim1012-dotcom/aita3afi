@@ -577,7 +577,19 @@ export async function fetchModels(baseUrl: string, apiKey: string): Promise<stri
   try {
     const response = await fetchWithCorsHandling(url, options);
     if (!response.ok) {
-      throw new Error(`Failed to fetch models: ${response.status}`);
+      let errMsg = `Failed to fetch models: ${response.status}`;
+      try {
+        const cloned = response.clone();
+        const errJson = await cloned.json();
+        if (errJson && errJson.error) {
+          if (typeof errJson.error === 'string') {
+            errMsg = errJson.error;
+          } else if (errJson.error.message) {
+            errMsg = errJson.error.message;
+          }
+        }
+      } catch {}
+      throw new Error(errMsg);
     }
     const data = await response.json();
     if (data && Array.isArray(data.data)) {

@@ -262,6 +262,19 @@ export default function App() {
       return { success: true, message: "کليلەکە پەیوەست بوو بەڵام مۆدێلی نەگەڕاندەوە." };
     } catch (e: any) {
       console.error(e);
+      const errStr = String(e.message || e).toLowerCase();
+      if (
+        errStr.includes("quota") ||
+        errStr.includes("insufficient") ||
+        errStr.includes("credit") ||
+        errStr.includes("balance") ||
+        errStr.includes("billing") ||
+        errStr.includes("exceeded") ||
+        errStr.includes("429") ||
+        errStr.includes("402")
+      ) {
+        return { success: false, message: "ئەم کلیلە ڕەسیدی تێدا نییە و ئیش ناکات! (No balance)" };
+      }
       return { success: false, message: `ئەم کلیلە کارناکات یان هەڵەیە. هەڵە: ${e.message || e}` };
     }
   };
