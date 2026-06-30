@@ -1100,7 +1100,7 @@ export default function App() {
                         onChange={(val) => setServerDrKeys(prev => ({ ...prev, [serverId]: val }))}
                         label={`کلیلەکانی دکتۆر (${srv.name})`}
                         placeholder="مفتاح API جديد..."
-                        maxKeys={100}
+                        maxKeys={1000}
                         palette={P}
                         dark={dark}
                         onTestKey={(key) => testApiKey(srv.baseUrl, key)}
@@ -1111,7 +1111,7 @@ export default function App() {
                         onChange={(val) => setServerRafiqKeys(prev => ({ ...prev, [serverId]: val }))}
                         label={`کلیلەکانی ڕەفیق (${srv.name})`}
                         placeholder="مفتاح API جديد..."
-                        maxKeys={100}
+                        maxKeys={1000}
                         palette={P}
                         dark={dark}
                         onTestKey={(key) => testApiKey(srv.baseUrl, key)}
