@@ -8,99 +8,99 @@ export const DEFAULT_BLUESMINDS_API_KEY = "VFnpPZlpu0iFyQkJtHF7HNfjjmn5FXJd9K2BV
 export const DEFAULT_BLUESMINDS_DOCTOR_MODEL = "gemini-2.5-flash";
 export const DEFAULT_BLUESMINDS_RAFIQ_MODEL = "gemini-2.5-flash";
 
+export const DEFAULT_KEYSFAN_API_KEY = "";
+export const DEFAULT_KEYSFAN_DOCTOR_MODEL = "gemini-2.5-flash";
+export const DEFAULT_KEYSFAN_RAFIQ_MODEL = "gemini-2.5-flash";
+
 const MANUS_BASE_URL = "https://api.manus.im/api/llm-proxy/v1";
 const BLUESMINDS_BASE_URL = "https://api.bluesminds.com/v1";
+const KEYSFAN_BASE_URL = "https://api.keysfan.ai/v1";
+
+export const ALL_SERVER_IDS = ["keysfan", "bluesminds", "manus"] as const;
+export type ServerId = typeof ALL_SERVER_IDS[number];
+
+function loadKeysFromStorage(primaryKey: string, fallbackKey: string, defaultKey: string): string[] {
+  let keys: string[] = [];
+  try {
+    const saved = localStorage.getItem(primaryKey);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) keys = parsed;
+    }
+  } catch (e) {
+    console.error(`Failed to parse keys from ${primaryKey}:`, e);
+  }
+  if (keys.length === 0 && defaultKey) {
+    const oldKey = localStorage.getItem(fallbackKey) || defaultKey;
+    if (oldKey) keys = [oldKey];
+  }
+  return keys;
+}
 
 export function getApiConfig() {
-  let drKeys: string[] = [];
-  let rafiqKeys: string[] = [];
-
-  try {
-    const drSaved = localStorage.getItem("admin_doctor_api_keys");
-    if (drSaved) {
-      const parsed = JSON.parse(drSaved);
-      if (Array.isArray(parsed)) drKeys = parsed;
-    }
-  } catch (e) {
-    console.error("Failed to parse doctor keys:", e);
-  }
-
-  try {
-    const rafiqSaved = localStorage.getItem("admin_rafiq_api_keys");
-    if (rafiqSaved) {
-      const parsed = JSON.parse(rafiqSaved);
-      if (Array.isArray(parsed)) rafiqKeys = parsed;
-    }
-  } catch (e) {
-    console.error("Failed to parse rafiq keys:", e);
-  }
-
-  // Fallback to old single keys or default keys if the lists are empty
-  if (drKeys.length === 0) {
-    const oldKey = localStorage.getItem("admin_doctor_api_key") || DEFAULT_DOCTOR_API_KEY;
-    if (oldKey) drKeys = [oldKey];
-  }
-  if (rafiqKeys.length === 0) {
-    const oldKey = localStorage.getItem("admin_rafiq_api_key") || DEFAULT_RAFIQ_API_KEY;
-    if (oldKey) rafiqKeys = [oldKey];
-  }
-
+  // Manus keys
+  const drKeys = loadKeysFromStorage("admin_doctor_api_keys", "admin_doctor_api_key", DEFAULT_DOCTOR_API_KEY);
+  const rafiqKeys = loadKeysFromStorage("admin_rafiq_api_keys", "admin_rafiq_api_key", DEFAULT_RAFIQ_API_KEY);
   const drModel = localStorage.getItem("admin_doctor_model") || DEFAULT_DOCTOR_MODEL;
   const rafiqModel = localStorage.getItem("admin_rafiq_model") || DEFAULT_RAFIQ_MODEL;
 
-  // Bluesminds configuration
-  let bmDrKeys: string[] = [];
-  let bmRafiqKeys: string[] = [];
-
-  try {
-    const bmDrSaved = localStorage.getItem("admin_bluesminds_doctor_keys");
-    if (bmDrSaved) {
-      const parsed = JSON.parse(bmDrSaved);
-      if (Array.isArray(parsed)) bmDrKeys = parsed;
-    }
-  } catch (e) {
-    console.error("Failed to parse Bluesminds doctor keys:", e);
-  }
-
-  try {
-    const bmRafiqSaved = localStorage.getItem("admin_bluesminds_rafiq_keys");
-    if (bmRafiqSaved) {
-      const parsed = JSON.parse(bmRafiqSaved);
-      if (Array.isArray(parsed)) bmRafiqKeys = parsed;
-    }
-  } catch (e) {
-    console.error("Failed to parse Bluesminds rafiq keys:", e);
-  }
-
-  if (bmDrKeys.length === 0) {
-    const oldKey = localStorage.getItem("admin_bluesminds_doctor_key") || DEFAULT_BLUESMINDS_API_KEY;
-    if (oldKey) bmDrKeys = [oldKey];
-  }
-  if (bmRafiqKeys.length === 0) {
-    const oldKey = localStorage.getItem("admin_bluesminds_rafiq_key") || DEFAULT_BLUESMINDS_API_KEY;
-    if (oldKey) bmRafiqKeys = [oldKey];
-  }
-
+  // Bluesminds keys
+  const bmDrKeys = loadKeysFromStorage("admin_bluesminds_doctor_keys", "admin_bluesminds_doctor_key", DEFAULT_BLUESMINDS_API_KEY);
+  const bmRafiqKeys = loadKeysFromStorage("admin_bluesminds_rafiq_keys", "admin_bluesminds_rafiq_key", DEFAULT_BLUESMINDS_API_KEY);
   const bmDrModel = localStorage.getItem("admin_bluesminds_doctor_model") || DEFAULT_BLUESMINDS_DOCTOR_MODEL;
   const bmRafiqModel = localStorage.getItem("admin_bluesminds_rafiq_model") || DEFAULT_BLUESMINDS_RAFIQ_MODEL;
 
+  // KeysFan keys
+  const kfDrKeys = loadKeysFromStorage("admin_keysfan_doctor_keys", "admin_keysfan_doctor_key", DEFAULT_KEYSFAN_API_KEY);
+  const kfRafiqKeys = loadKeysFromStorage("admin_keysfan_rafiq_keys", "admin_keysfan_rafiq_key", DEFAULT_KEYSFAN_API_KEY);
+  const kfDrModel = localStorage.getItem("admin_keysfan_doctor_model") || DEFAULT_KEYSFAN_DOCTOR_MODEL;
+  const kfRafiqModel = localStorage.getItem("admin_keysfan_rafiq_model") || DEFAULT_KEYSFAN_RAFIQ_MODEL;
+
   const puterModel = localStorage.getItem("admin_puter_model") || "gemini-3-flash-preview";
 
-  const serverDisabled = localStorage.getItem("admin_server_disabled") || "";
-  const serverPriority = localStorage.getItem("admin_server_priority") || "bluesminds_first";
+  // Dynamic server ordering and disabling
+  let serversOrder: ServerId[] = [...ALL_SERVER_IDS];
+  try {
+    const saved = localStorage.getItem("admin_servers_order");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Ensure all known servers are in the list
+        const validOrder = parsed.filter((s: string) => ALL_SERVER_IDS.includes(s as ServerId)) as ServerId[];
+        const missing = ALL_SERVER_IDS.filter(s => !validOrder.includes(s));
+        serversOrder = [...validOrder, ...missing];
+      }
+    }
+  } catch {}
+
+  let serversDisabled: ServerId[] = [];
+  try {
+    const saved = localStorage.getItem("admin_servers_disabled");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        serversDisabled = parsed.filter((s: string) => ALL_SERVER_IDS.includes(s as ServerId)) as ServerId[];
+      }
+    }
+  } catch {}
+
+  // Legacy migration: convert old serverDisabled/serverPriority to new format
+  if (!localStorage.getItem("admin_servers_order") && !localStorage.getItem("admin_servers_disabled")) {
+    const oldDisabled = localStorage.getItem("admin_server_disabled") || "";
+    const oldPriority = localStorage.getItem("admin_server_priority") || "bluesminds_first";
+    if (oldDisabled === "bluesminds") serversDisabled = ["bluesminds"];
+    else if (oldDisabled === "manus") serversDisabled = ["manus"];
+    if (oldPriority === "manus_first") serversOrder = ["keysfan", "manus", "bluesminds"];
+    else serversOrder = ["keysfan", "bluesminds", "manus"];
+  }
 
   return { 
-    drKeys, 
-    rafiqKeys, 
-    drModel, 
-    rafiqModel, 
+    drKeys, rafiqKeys, drModel, rafiqModel, 
     puterModel,
-    bmDrKeys,
-    bmRafiqKeys,
-    bmDrModel,
-    bmRafiqModel,
-    serverDisabled,
-    serverPriority
+    bmDrKeys, bmRafiqKeys, bmDrModel, bmRafiqModel,
+    kfDrKeys, kfRafiqKeys, kfDrModel, kfRafiqModel,
+    serversOrder,
+    serversDisabled,
   };
 }
 
@@ -408,6 +408,72 @@ async function fetchWithCorsHandling(
   throw new Error("All CORS methods failed");
 }
 
+// Generic helper to try a server with given keys, model, and base URL
+async function tryServer(
+  serverName: string,
+  baseUrl: string,
+  keys: string[],
+  defaultKeys: string[],
+  model: string,
+  messages: Message[],
+  persona: string
+): Promise<{ content: string } | null> {
+  const keysToTry = keys.length > 0 ? keys : defaultKeys;
+  if (keysToTry.length === 0 || (keysToTry.length === 1 && keysToTry[0] === "")) return null;
+  for (let index = 0; index < keysToTry.length; index++) {
+    const apiKey = keysToTry[index];
+    if (!apiKey) continue;
+    console.log(`Trying ${serverName} API key index ${index} for ${persona}...`);
+    const body = JSON.stringify({ model, messages, temperature: 0.8, max_tokens: 8000 });
+    try {
+      const response = await fetchWithCorsHandling(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body,
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`${serverName} API Error for key index ${index}:`, errorText);
+        throw new Error(`${serverName} API request failed with status: ${response.status}`);
+      }
+      const data = await response.json();
+      return { content: data.choices[0].message.content };
+    } catch (err) {
+      console.warn(`${serverName} key index ${index} failed:`, err);
+    }
+  }
+  return null;
+}
+
+function getServerConfig(serverId: ServerId, config: ReturnType<typeof getApiConfig>, persona: "doctor" | "rafiq") {
+  switch (serverId) {
+    case "keysfan":
+      return {
+        name: "KeysFan",
+        baseUrl: KEYSFAN_BASE_URL,
+        keys: (persona === "doctor" ? config.kfDrKeys : config.kfRafiqKeys).filter(k => k.trim() !== ""),
+        defaultKeys: DEFAULT_KEYSFAN_API_KEY ? [DEFAULT_KEYSFAN_API_KEY] : [],
+        model: persona === "doctor" ? config.kfDrModel : config.kfRafiqModel,
+      };
+    case "bluesminds":
+      return {
+        name: "Bluesminds",
+        baseUrl: BLUESMINDS_BASE_URL,
+        keys: (persona === "doctor" ? config.bmDrKeys : config.bmRafiqKeys).filter(k => k.trim() !== ""),
+        defaultKeys: [DEFAULT_BLUESMINDS_API_KEY],
+        model: persona === "doctor" ? config.bmDrModel : config.bmRafiqModel,
+      };
+    case "manus":
+      return {
+        name: "Manus",
+        baseUrl: MANUS_BASE_URL,
+        keys: (persona === "doctor" ? config.drKeys : config.rafiqKeys).filter(k => k.trim() !== ""),
+        defaultKeys: [persona === "doctor" ? DEFAULT_DOCTOR_API_KEY : DEFAULT_RAFIQ_API_KEY],
+        model: persona === "doctor" ? config.drModel : config.rafiqModel,
+      };
+  }
+}
+
 export async function sendMessage(
   conversationHistory: Message[],
   persona: "doctor" | "rafiq" = "doctor"
@@ -421,98 +487,34 @@ export async function sendMessage(
   ];
 
   const config = getApiConfig();
-  const activeModelBm = persona === "doctor" ? config.bmDrModel : config.bmRafiqModel;
-  const activeModelManus = persona === "doctor" ? config.drModel : config.rafiqModel;
-
-  const bmKeys = (persona === "doctor" ? config.bmDrKeys : config.bmRafiqKeys).filter(k => k.trim() !== "");
-  const manusKeys = (persona === "doctor" ? config.drKeys : config.rafiqKeys).filter(k => k.trim() !== "");
-
-  const { serverDisabled, serverPriority } = config;
-  const isBluesmindsDisabled = serverDisabled === "bluesminds";
-  const isManusDisabled = serverDisabled === "manus";
-  const isManusFirst = serverPriority === "manus_first";
+  const { serversOrder, serversDisabled } = config;
+  const disabledSet = new Set(serversDisabled);
 
   let lastError: any = null;
+  const serverLabels: Record<number, "first" | "second" | "third"> = { 0: "first", 1: "second", 2: "third" };
 
-  // Helper: try Bluesminds
-  const tryBluesminds = async (): Promise<{ content: string; serverUsed: "first" | "second" | "third" } | null> => {
-    if (isBluesmindsDisabled) {
-      console.log("Bluesminds is DISABLED by admin, skipping...");
-      return null;
+  // Try servers in dynamic order, skip disabled ones
+  for (let i = 0; i < serversOrder.length; i++) {
+    const serverId = serversOrder[i];
+    if (disabledSet.has(serverId)) {
+      console.log(`${serverId} is DISABLED by admin, skipping...`);
+      continue;
     }
-    const bmKeysToTry = bmKeys.length > 0 ? bmKeys : [DEFAULT_BLUESMINDS_API_KEY];
-    for (let index = 0; index < bmKeysToTry.length; index++) {
-      const apiKey = bmKeysToTry[index];
-      if (!apiKey) continue;
-      console.log(`Trying Bluesminds API key index ${index} for ${persona}...`);
-      const body = JSON.stringify({ model: activeModelBm, messages, temperature: 0.8, max_tokens: 8000 });
-      try {
-        const response = await fetchWithCorsHandling(`${BLUESMINDS_BASE_URL}/chat/completions`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body,
-        });
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`Bluesminds API Error for key index ${index}:`, errorText);
-          throw new Error(`Bluesminds API request failed with status: ${response.status}`);
-        }
-        const data = await response.json();
-        return { content: data.choices[0].message.content, serverUsed: "first" };
-      } catch (err) {
-        console.warn(`Bluesminds key index ${index} failed:`, err);
-        lastError = err;
+
+    const sc = getServerConfig(serverId, config, persona);
+    try {
+      const result = await tryServer(sc.name, sc.baseUrl, sc.keys, sc.defaultKeys, sc.model, messages, persona);
+      if (result) {
+        return { content: result.content, serverUsed: serverLabels[i] || "third" };
       }
+    } catch (err) {
+      lastError = err;
     }
-    return null;
-  };
+    console.log(`${sc.name} failed, trying next server...`);
+  }
 
-  // Helper: try Manus
-  const tryManus = async (): Promise<{ content: string; serverUsed: "first" | "second" | "third" } | null> => {
-    if (isManusDisabled) {
-      console.log("Manus is DISABLED by admin, skipping...");
-      return null;
-    }
-    const manusKeysToTry = manusKeys.length > 0 ? manusKeys : [persona === "doctor" ? DEFAULT_DOCTOR_API_KEY : DEFAULT_RAFIQ_API_KEY];
-    for (let index = 0; index < manusKeysToTry.length; index++) {
-      const apiKey = manusKeysToTry[index];
-      if (!apiKey) continue;
-      console.log(`Trying Manus API key index ${index} for ${persona}...`);
-      const body = JSON.stringify({ model: activeModelManus, messages, temperature: 0.8, max_tokens: 8000 });
-      try {
-        const response = await fetchWithCorsHandling(`${MANUS_BASE_URL}/chat/completions`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body,
-        });
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`Manus API Error for key index ${index}:`, errorText);
-          throw new Error(`Manus API request failed with status: ${response.status}`);
-        }
-        const data = await response.json();
-        return { content: data.choices[0].message.content, serverUsed: "second" };
-      } catch (err) {
-        console.warn(`Manus key index ${index} failed:`, err);
-        lastError = err;
-      }
-    }
-    return null;
-  };
-
-  // Try servers based on priority order
-  const firstTry = isManusFirst ? tryManus : tryBluesminds;
-  const secondTry = isManusFirst ? tryBluesminds : tryManus;
-
-  const result1 = await firstTry();
-  if (result1) return result1;
-
-  console.log("First server failed or disabled, trying second...");
-  const result2 = await secondTry();
-  if (result2) return result2;
-
-  // 3. Fallback to Puter.js if both fail
-  console.warn("Primary and secondary APIs failed, falling back to Puter.js", lastError);
+  // Fallback to Puter.js if all servers fail
+  console.warn("All API servers failed, falling back to Puter.js", lastError);
   if (window.puter) {
     if (!window.puter.auth.isSignedIn()) {
       throw new Error("PUTER_AUTH_REQUIRED");
@@ -530,8 +532,13 @@ export async function sendMessage(
   throw lastError || new Error("All API keys failed");
 }
 
-export async function fetchModels(provider: 'bluesminds' | 'manus', apiKey: string): Promise<string[]> {
-  const baseUrl = provider === 'bluesminds' ? BLUESMINDS_BASE_URL : MANUS_BASE_URL;
+export async function fetchModels(provider: 'bluesminds' | 'manus' | 'keysfan', apiKey: string): Promise<string[]> {
+  let baseUrl: string;
+  switch (provider) {
+    case 'bluesminds': baseUrl = BLUESMINDS_BASE_URL; break;
+    case 'manus': baseUrl = MANUS_BASE_URL; break;
+    case 'keysfan': baseUrl = KEYSFAN_BASE_URL; break;
+  }
   const url = `${baseUrl}/models`;
   
   const options = {
