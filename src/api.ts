@@ -16,8 +16,32 @@ const MANUS_BASE_URL = "https://api.manus.im/api/llm-proxy/v1";
 const BLUESMINDS_BASE_URL = "https://api.bluesminds.com/v1";
 const KEYSFAN_BASE_URL = "https://api.keysfan.ai/v1";
 
-export const ALL_SERVER_IDS = ["keysfan", "bluesminds", "manus"] as const;
-export type ServerId = typeof ALL_SERVER_IDS[number];
+export interface CustomServer {
+  id: string;
+  name: string;
+  icon: string;
+  baseUrl: string;
+  isDefault?: boolean;
+}
+
+export const DEFAULT_SERVERS: CustomServer[] = [
+  { id: "keysfan", name: "KeysFan.ai", icon: "🔑", baseUrl: KEYSFAN_BASE_URL, isDefault: true },
+  { id: "bluesminds", name: "Bluesminds", icon: "🌿", baseUrl: BLUESMINDS_BASE_URL, isDefault: true },
+  { id: "manus", name: "Manus", icon: "🤖", baseUrl: MANUS_BASE_URL, isDefault: true },
+];
+
+export function getCustomServers(): CustomServer[] {
+  try {
+    const saved = localStorage.getItem("admin_custom_servers");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch {}
+  return DEFAULT_SERVERS;
+}
 
 function loadKeysFromStorage(primaryKey: string, fallbackKey: string, defaultKey: string): string[] {
   let keys: string[] = [];
@@ -38,53 +62,83 @@ function loadKeysFromStorage(primaryKey: string, fallbackKey: string, defaultKey
 }
 
 export function getApiConfig() {
-  // Manus keys
-  const drKeys = loadKeysFromStorage("admin_doctor_api_keys", "admin_doctor_api_key", DEFAULT_DOCTOR_API_KEY);
-  const rafiqKeys = loadKeysFromStorage("admin_rafiq_api_keys", "admin_rafiq_api_key", DEFAULT_RAFIQ_API_KEY);
-  const drModel = localStorage.getItem("admin_doctor_model") || DEFAULT_DOCTOR_MODEL;
-  const rafiqModel = localStorage.getItem("admin_rafiq_model") || DEFAULT_RAFIQ_MODEL;
+  const servers = getCustomServers();
 
-  // Bluesminds keys
-  const bmDrKeys = loadKeysFromStorage("admin_bluesminds_doctor_keys", "admin_bluesminds_doctor_key", DEFAULT_BLUESMINDS_API_KEY);
-  const bmRafiqKeys = loadKeysFromStorage("admin_bluesminds_rafiq_keys", "admin_bluesminds_rafiq_key", DEFAULT_BLUESMINDS_API_KEY);
-  const bmDrModel = localStorage.getItem("admin_bluesminds_doctor_model") || DEFAULT_BLUESMINDS_DOCTOR_MODEL;
-  const bmRafiqModel = localStorage.getItem("admin_bluesminds_rafiq_model") || DEFAULT_BLUESMINDS_RAFIQ_MODEL;
+  const serverConfigs = servers.map(srv => {
+    let drKeysKey = `admin_${srv.id}_doctor_api_keys`;
+    let rafiqKeysKey = `admin_${srv.id}_rafiq_api_keys`;
+    let drModelKey = `admin_${srv.id}_doctor_model`;
+    let rafiqModelKey = `admin_${srv.id}_rafiq_model`;
 
-  // KeysFan keys
-  const kfDrKeys = loadKeysFromStorage("admin_keysfan_doctor_keys", "admin_keysfan_doctor_key", DEFAULT_KEYSFAN_API_KEY);
-  const kfRafiqKeys = loadKeysFromStorage("admin_keysfan_rafiq_keys", "admin_keysfan_rafiq_key", DEFAULT_KEYSFAN_API_KEY);
-  const kfDrModel = localStorage.getItem("admin_keysfan_doctor_model") || DEFAULT_KEYSFAN_DOCTOR_MODEL;
-  const kfRafiqModel = localStorage.getItem("admin_keysfan_rafiq_model") || DEFAULT_KEYSFAN_RAFIQ_MODEL;
+    // Map default ones for backward compatibility
+    if (srv.id === "manus") {
+      drKeysKey = "admin_doctor_api_keys";
+      rafiqKeysKey = "admin_rafiq_api_keys";
+      drModelKey = "admin_doctor_model";
+      rafiqModelKey = "admin_rafiq_model";
+    } else if (srv.id === "bluesminds") {
+      drKeysKey = "admin_bluesminds_doctor_keys";
+      rafiqKeysKey = "admin_bluesminds_rafiq_keys";
+      drModelKey = "admin_bluesminds_doctor_model";
+      rafiqModelKey = "admin_bluesminds_rafiq_model";
+    } else if (srv.id === "keysfan") {
+      drKeysKey = "admin_keysfan_doctor_keys";
+      rafiqKeysKey = "admin_keysfan_rafiq_keys";
+      drModelKey = "admin_keysfan_doctor_model";
+      rafiqModelKey = "admin_keysfan_rafiq_model";
+    }
+
+    let defaultKey = "";
+    if (srv.id === "bluesminds") defaultKey = DEFAULT_BLUESMINDS_API_KEY;
+    else if (srv.id === "manus") defaultKey = DEFAULT_DOCTOR_API_KEY;
+
+    const drKeys = loadKeysFromStorage(drKeysKey, `admin_${srv.id}_doctor_api_key`, srv.id === "manus" ? DEFAULT_DOCTOR_API_KEY : defaultKey);
+    const rafiqKeys = loadKeysFromStorage(rafiqKeysKey, `admin_${srv.id}_rafiq_api_key`, srv.id === "manus" ? DEFAULT_RAFIQ_API_KEY : defaultKey);
+
+    const drModel = localStorage.getItem(drModelKey) || "gemini-2.5-flash";
+    const rafiqModel = localStorage.getItem(rafiqModelKey) || "gemini-2.5-flash";
+
+    return {
+      id: srv.id,
+      name: srv.name,
+      icon: srv.icon,
+      baseUrl: srv.baseUrl,
+      drKeys,
+      rafiqKeys,
+      drModel,
+      rafiqModel,
+    };
+  });
 
   const puterModel = localStorage.getItem("admin_puter_model") || "gemini-3-flash-preview";
 
   // Dynamic server ordering and disabling
-  let serversOrder: ServerId[] = [...ALL_SERVER_IDS];
+  const allIds = servers.map(s => s.id);
+  let serversOrder: string[] = [...allIds];
   try {
     const saved = localStorage.getItem("admin_servers_order");
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Ensure all known servers are in the list
-        const validOrder = parsed.filter((s: string) => ALL_SERVER_IDS.includes(s as ServerId)) as ServerId[];
-        const missing = ALL_SERVER_IDS.filter(s => !validOrder.includes(s));
+        const validOrder = parsed.filter((s: string) => allIds.includes(s));
+        const missing = allIds.filter(s => !validOrder.includes(s));
         serversOrder = [...validOrder, ...missing];
       }
     }
   } catch {}
 
-  let serversDisabled: ServerId[] = [];
+  let serversDisabled: string[] = [];
   try {
     const saved = localStorage.getItem("admin_servers_disabled");
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) {
-        serversDisabled = parsed.filter((s: string) => ALL_SERVER_IDS.includes(s as ServerId)) as ServerId[];
+        serversDisabled = parsed.filter((s: string) => allIds.includes(s));
       }
     }
   } catch {}
 
-  // Legacy migration: convert old serverDisabled/serverPriority to new format
+  // Legacy migration
   if (!localStorage.getItem("admin_servers_order") && !localStorage.getItem("admin_servers_disabled")) {
     const oldDisabled = localStorage.getItem("admin_server_disabled") || "";
     const oldPriority = localStorage.getItem("admin_server_priority") || "bluesminds_first";
@@ -93,14 +147,11 @@ export function getApiConfig() {
     if (oldPriority === "manus_first") serversOrder = ["keysfan", "manus", "bluesminds"];
     else serversOrder = ["keysfan", "bluesminds", "manus"];
   }
-
-  return { 
-    drKeys, rafiqKeys, drModel, rafiqModel, 
-    puterModel,
-    bmDrKeys, bmRafiqKeys, bmDrModel, bmRafiqModel,
-    kfDrKeys, kfRafiqKeys, kfDrModel, kfRafiqModel,
+  return {
+    serverConfigs,
     serversOrder,
     serversDisabled,
+    puterModel,
   };
 }
 
@@ -445,35 +496,6 @@ async function tryServer(
   return null;
 }
 
-function getServerConfig(serverId: ServerId, config: ReturnType<typeof getApiConfig>, persona: "doctor" | "rafiq") {
-  switch (serverId) {
-    case "keysfan":
-      return {
-        name: "KeysFan",
-        baseUrl: KEYSFAN_BASE_URL,
-        keys: (persona === "doctor" ? config.kfDrKeys : config.kfRafiqKeys).filter(k => k.trim() !== ""),
-        defaultKeys: DEFAULT_KEYSFAN_API_KEY ? [DEFAULT_KEYSFAN_API_KEY] : [],
-        model: persona === "doctor" ? config.kfDrModel : config.kfRafiqModel,
-      };
-    case "bluesminds":
-      return {
-        name: "Bluesminds",
-        baseUrl: BLUESMINDS_BASE_URL,
-        keys: (persona === "doctor" ? config.bmDrKeys : config.bmRafiqKeys).filter(k => k.trim() !== ""),
-        defaultKeys: [DEFAULT_BLUESMINDS_API_KEY],
-        model: persona === "doctor" ? config.bmDrModel : config.bmRafiqModel,
-      };
-    case "manus":
-      return {
-        name: "Manus",
-        baseUrl: MANUS_BASE_URL,
-        keys: (persona === "doctor" ? config.drKeys : config.rafiqKeys).filter(k => k.trim() !== ""),
-        defaultKeys: [persona === "doctor" ? DEFAULT_DOCTOR_API_KEY : DEFAULT_RAFIQ_API_KEY],
-        model: persona === "doctor" ? config.drModel : config.rafiqModel,
-      };
-  }
-}
-
 export async function sendMessage(
   conversationHistory: Message[],
   persona: "doctor" | "rafiq" = "doctor"
@@ -487,7 +509,7 @@ export async function sendMessage(
   ];
 
   const config = getApiConfig();
-  const { serversOrder, serversDisabled } = config;
+  const { serverConfigs, serversOrder, serversDisabled } = config;
   const disabledSet = new Set(serversDisabled);
 
   let lastError: any = null;
@@ -501,16 +523,26 @@ export async function sendMessage(
       continue;
     }
 
-    const sc = getServerConfig(serverId, config, persona);
+    const srvConf = serverConfigs.find(s => s.id === serverId);
+    if (!srvConf) continue;
+
+    const keys = persona === "doctor" ? srvConf.drKeys : srvConf.rafiqKeys;
+    const model = persona === "doctor" ? srvConf.drModel : srvConf.rafiqModel;
+    const defaultKeys = srvConf.id === "manus" 
+      ? [persona === "doctor" ? DEFAULT_DOCTOR_API_KEY : DEFAULT_RAFIQ_API_KEY]
+      : srvConf.id === "bluesminds"
+        ? [DEFAULT_BLUESMINDS_API_KEY]
+        : [];
+
     try {
-      const result = await tryServer(sc.name, sc.baseUrl, sc.keys, sc.defaultKeys, sc.model, messages, persona);
+      const result = await tryServer(srvConf.name, srvConf.baseUrl, keys, defaultKeys, model, messages, persona);
       if (result) {
         return { content: result.content, serverUsed: serverLabels[i] || "third" };
       }
     } catch (err) {
       lastError = err;
     }
-    console.log(`${sc.name} failed, trying next server...`);
+    console.log(`${srvConf.name} failed, trying next server...`);
   }
 
   // Fallback to Puter.js if all servers fail
@@ -532,13 +564,7 @@ export async function sendMessage(
   throw lastError || new Error("All API keys failed");
 }
 
-export async function fetchModels(provider: 'bluesminds' | 'manus' | 'keysfan', apiKey: string): Promise<string[]> {
-  let baseUrl: string;
-  switch (provider) {
-    case 'bluesminds': baseUrl = BLUESMINDS_BASE_URL; break;
-    case 'manus': baseUrl = MANUS_BASE_URL; break;
-    case 'keysfan': baseUrl = KEYSFAN_BASE_URL; break;
-  }
+export async function fetchModels(baseUrl: string, apiKey: string): Promise<string[]> {
   const url = `${baseUrl}/models`;
   
   const options = {
@@ -559,7 +585,7 @@ export async function fetchModels(provider: 'bluesminds' | 'manus' | 'keysfan', 
     }
     return [];
   } catch (error) {
-    console.error(`Error fetching models for ${provider}:`, error);
+    console.error(`Error fetching models from ${baseUrl}:`, error);
     throw error;
   }
 }

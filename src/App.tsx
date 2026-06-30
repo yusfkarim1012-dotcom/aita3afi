@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { sendMessage, type Message, ALL_SERVER_IDS, type ServerId } from "./api";
+import { sendMessage, type Message, getCustomServers, DEFAULT_SERVERS, type CustomServer } from "./api";
 import { useAppStore } from "./store";
 import KeyChipsInput from "./KeyChipsInput";
 
@@ -97,38 +97,95 @@ export default function App() {
   const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
   const [adminError, setAdminError] = useState("");
 
-  const [adminBmDrKeysText, setAdminBmDrKeysText] = useState("");
-  const [adminBmRafiqKeysText, setAdminBmRafiqKeysText] = useState("");
-  const [adminDrKeysText, setAdminDrKeysText] = useState("");
-  const [adminRafiqKeysText, setAdminRafiqKeysText] = useState("");
-  const [adminKfDrKeysText, setAdminKfDrKeysText] = useState("");
-  const [adminKfRafiqKeysText, setAdminKfRafiqKeysText] = useState("");
+  const [adminCustomServers, setAdminCustomServers] = useState<CustomServer[]>([]);
+  const [serverDrKeys, setServerDrKeys] = useState<Record<string, string>>({});
+  const [serverRafiqKeys, setServerRafiqKeys] = useState<Record<string, string>>({});
+  const [serverDrModel, setServerDrModel] = useState<Record<string, string>>({});
+  const [serverRafiqModel, setServerRafiqModel] = useState<Record<string, string>>({});
+  const [fetchingModelsMap, setFetchingModelsMap] = useState<Record<string, boolean>>({});
 
-  const [adminBmDrModel, setAdminBmDrModel] = useState("");
-  const [adminBmRafiqModel, setAdminBmRafiqModel] = useState("");
-  const [adminDrModel, setAdminDrModel] = useState("");
-  const [adminRafiqModel, setAdminRafiqModel] = useState("");
-  const [adminKfDrModel, setAdminKfDrModel] = useState("");
-  const [adminKfRafiqModel, setAdminKfRafiqModel] = useState("");
+  const [adminServersOrder, setAdminServersOrder] = useState<string[]>([]);
+  const [adminServersDisabled, setAdminServersDisabled] = useState<Set<string>>(new Set());
   const [adminPuterModel, setAdminPuterModel] = useState("");
 
-  // Dynamic server ordering & per-server disable
-  const [adminServersOrder, setAdminServersOrder] = useState<ServerId[]>([...ALL_SERVER_IDS]);
-  const [adminServersDisabled, setAdminServersDisabled] = useState<Set<ServerId>>(new Set());
+  // UI forms states for Add/Edit server
+  const [showAddServerForm, setShowAddServerForm] = useState(false);
+  const [newServerName, setNewServerName] = useState("");
+  const [newServerIcon, setNewServerIcon] = useState("🌐");
+  const [newServerUrl, setNewServerUrl] = useState("");
 
-  const [bmDoctorModels, setBmDoctorModels] = useState<string[]>(["gemini-2.5-flash"]);
-  const [bmRafiqModels, setBmRafiqModels] = useState<string[]>(["gemini-2.5-flash"]);
-  const [manusDoctorModels, setManusDoctorModels] = useState<string[]>(["gemini-2.5-flash"]);
-  const [manusRafiqModels, setManusRafiqModels] = useState<string[]>(["gemini-2.5-flash"]);
-  const [kfDoctorModels, setKfDoctorModels] = useState<string[]>(["gemini-2.5-flash"]);
-  const [kfRafiqModels, setKfRafiqModels] = useState<string[]>(["gemini-2.5-flash"]);
+  const [editingServerId, setEditingServerId] = useState<string | null>(null);
+  const [editServerName, setEditServerName] = useState("");
+  const [editServerIcon, setEditServerIcon] = useState("");
+  const [editServerUrl, setEditServerUrl] = useState("");
 
-  const [fetchingBmDrModels, setFetchingBmDrModels] = useState(false);
-  const [fetchingBmRafiqModels, setFetchingBmRafiqModels] = useState(false);
-  const [fetchingManusDrModels, setFetchingManusDrModels] = useState(false);
-  const [fetchingManusRafiqModels, setFetchingManusRafiqModels] = useState(false);
-  const [fetchingKfDrModels, setFetchingKfDrModels] = useState(false);
-  const [fetchingKfRafiqModels, setFetchingKfRafiqModels] = useState(false);
+  const handleAddCustomServer = () => {
+    if (!newServerName.trim() || !newServerUrl.trim()) {
+      alert("⚠️ يرجى إدخال الاسم وعنوان API URL.");
+      return;
+    }
+    const cleanId = "custom-" + Date.now();
+    const newServer: CustomServer = {
+      id: cleanId,
+      name: newServerName.trim(),
+      icon: newServerIcon.trim() || "🌐",
+      baseUrl: newServerUrl.trim(),
+    };
+
+    setAdminCustomServers(prev => [...prev, newServer]);
+    setAdminServersOrder(prev => [...prev, cleanId]);
+
+    setServerDrKeys(prev => ({ ...prev, [cleanId]: "" }));
+    setServerRafiqKeys(prev => ({ ...prev, [cleanId]: "" }));
+    setServerDrModel(prev => ({ ...prev, [cleanId]: "gemini-2.5-flash" }));
+    setServerRafiqModel(prev => ({ ...prev, [cleanId]: "gemini-2.5-flash" }));
+
+    setNewServerName("");
+    setNewServerIcon("🌐");
+    setNewServerUrl("");
+    setShowAddServerForm(false);
+  };
+
+  const handleStartEditServer = (srv: CustomServer) => {
+    setEditingServerId(srv.id);
+    setEditServerName(srv.name);
+    setEditServerIcon(srv.icon);
+    setEditServerUrl(srv.baseUrl);
+  };
+
+  const handleUpdateCustomServer = () => {
+    if (!editingServerId) return;
+    if (!editServerName.trim() || !editServerUrl.trim()) {
+      alert("⚠️ يرجى إدخال الاسم وعنوان API URL.");
+      return;
+    }
+
+    setAdminCustomServers(prev => prev.map(s => {
+      if (s.id === editingServerId) {
+        return {
+          ...s,
+          name: editServerName.trim(),
+          icon: editServerIcon.trim() || "🌐",
+          baseUrl: editServerUrl.trim(),
+        };
+      }
+      return s;
+    }));
+
+    setEditingServerId(null);
+  };
+
+  const handleDeleteCustomServer = (serverId: string) => {
+    if (confirm("⚠️ ئایا دڵنیای لە سڕینەوەی ئەم سێرڤەرە؟")) {
+      setAdminCustomServers(prev => prev.filter(s => s.id !== serverId));
+      setAdminServersOrder(prev => prev.filter(id => id !== serverId));
+      setAdminServersDisabled(prev => {
+        const next = new Set(prev);
+        next.delete(serverId);
+        return next;
+      });
+    }
+  };
 
   // Server reorder helpers
   const moveServerUp = (index: number) => {
@@ -147,7 +204,7 @@ export default function App() {
       return newOrder;
     });
   };
-  const toggleServerDisabled = (serverId: ServerId) => {
+  const toggleServerDisabled = (serverId: string) => {
     setAdminServersDisabled(prev => {
       const next = new Set(prev);
       if (next.has(serverId)) next.delete(serverId);
@@ -156,54 +213,32 @@ export default function App() {
     });
   };
 
-  const fetchLatestModels = async (provider: 'bluesminds' | 'manus' | 'keysfan', persona: 'doctor' | 'rafiq') => {
-    let keysText = "";
-    if (provider === 'keysfan') keysText = persona === 'doctor' ? adminKfDrKeysText : adminKfRafiqKeysText;
-    else if (provider === 'bluesminds') keysText = persona === 'doctor' ? adminBmDrKeysText : adminBmRafiqKeysText;
-    else keysText = persona === 'doctor' ? adminDrKeysText : adminRafiqKeysText;
-    
+  const fetchLatestModels = async (serverId: string, baseUrl: string, persona: 'doctor' | 'rafiq') => {
+    const keysText = (persona === 'doctor' ? serverDrKeys[serverId] : serverRafiqKeys[serverId]) || "";
     const keys = keysText.split('\n').map(k => k.trim()).filter(k => k !== "");
     let defaultKey = '';
-    if (provider === 'bluesminds') defaultKey = "VFnpPZlpu0iFyQkJtHF7HNfjjmn5FXJd9K2BV";
-    else if (provider === 'manus') defaultKey = persona === 'doctor' ? "sk-hLwMhHmK84UppzziebKMn5" : "sk-VUgfFKWUMeimyDihMFBJVj";
+    if (serverId === 'bluesminds') defaultKey = "VFnpPZlpu0iFyQkJtHF7HNfjjmn5FXJd9K2BV";
+    else if (serverId === 'manus') defaultKey = persona === 'doctor' ? "sk-hLwMhHmK84UppzziebKMn5" : "sk-VUgfFKWUMeimyDihMFBJVj";
     const primaryKey = keys[0] || defaultKey;
 
     if (!primaryKey) { alert("⚠️ لا يوجد مفتاح API لاختباره."); return; }
 
-    const setter = provider === 'keysfan'
-      ? (persona === 'doctor' ? setKfDoctorModels : setKfRafiqModels)
-      : provider === 'bluesminds'
-        ? (persona === 'doctor' ? setBmDoctorModels : setBmRafiqModels)
-        : (persona === 'doctor' ? setManusDoctorModels : setManusRafiqModels);
-
-    const loaderSetter = provider === 'keysfan'
-      ? (persona === 'doctor' ? setFetchingKfDrModels : setFetchingKfRafiqModels)
-      : provider === 'bluesminds'
-        ? (persona === 'doctor' ? setFetchingBmDrModels : setFetchingBmRafiqModels)
-        : (persona === 'doctor' ? setFetchingManusDrModels : setFetchingManusRafiqModels);
-
-    loaderSetter(true);
+    const loadingKey = `${serverId}-${persona}`;
+    setFetchingModelsMap(prev => ({ ...prev, [loadingKey]: true }));
     try {
       const { fetchModels } = await import('./api');
-      const models = await fetchModels(provider, primaryKey);
+      const models = await fetchModels(baseUrl, primaryKey);
       if (models.length > 0) {
-        setter(models);
-        
-        let currentModel = "";
-        let modelSetter: (v: string) => void;
-        if (provider === 'keysfan') {
-          currentModel = persona === 'doctor' ? adminKfDrModel : adminKfRafiqModel;
-          modelSetter = persona === 'doctor' ? setAdminKfDrModel : setAdminKfRafiqModel;
-        } else if (provider === 'bluesminds') {
-          currentModel = persona === 'doctor' ? adminBmDrModel : adminBmRafiqModel;
-          modelSetter = persona === 'doctor' ? setAdminBmDrModel : setAdminBmRafiqModel;
+        if (persona === 'doctor') {
+          const currentModel = serverDrModel[serverId] || "";
+          if (!models.includes(currentModel)) {
+            setServerDrModel(prev => ({ ...prev, [serverId]: models[0] }));
+          }
         } else {
-          currentModel = persona === 'doctor' ? adminDrModel : adminRafiqModel;
-          modelSetter = persona === 'doctor' ? setAdminDrModel : setAdminRafiqModel;
-        }
-
-        if (!models.includes(currentModel)) {
-          modelSetter(models[0]);
+          const currentModel = serverRafiqModel[serverId] || "";
+          if (!models.includes(currentModel)) {
+            setServerRafiqModel(prev => ({ ...prev, [serverId]: models[0] }));
+          }
         }
         alert("🚀 تم جلب الموديلات بنجاح!");
       } else {
@@ -213,18 +248,18 @@ export default function App() {
       console.error(e);
       alert(`❌ فشل جلب الموديلات: ${e.message || e}`);
     } finally {
-      loaderSetter(false);
+      setFetchingModelsMap(prev => ({ ...prev, [loadingKey]: false }));
     }
   };
 
-  const testApiKey = async (provider: 'bluesminds' | 'manus' | 'keysfan', apiKey: string): Promise<{ success: boolean; message: string }> => {
+  const testApiKey = async (baseUrl: string, apiKey: string): Promise<{ success: boolean; message: string }> => {
     try {
       const { fetchModels } = await import('./api');
-      const models = await fetchModels(provider, apiKey);
+      const models = await fetchModels(baseUrl, apiKey);
       if (models && models.length > 0) {
         return { success: true, message: `کلیلەکە چالاکە و کاردەکات! مۆدێلە بەردەستەکان: ${models.slice(0, 3).join(', ')}` };
       }
-      return { success: true, message: "کلیلەکە پەیوەست بوو بەڵام مۆدێلی نەگەڕاندەوە." };
+      return { success: true, message: "کليلەکە پەیوەست بوو بەڵام مۆدێلی نەگەڕاندەوە." };
     } catch (e: any) {
       console.error(e);
       return { success: false, message: `ئەم کلیلە کارناکات یان هەڵەیە. هەڵە: ${e.message || e}` };
@@ -278,6 +313,14 @@ export default function App() {
       setIsAdminAuthorized(true);
       setAdminError("");
 
+      const currentServers = getCustomServers();
+      setAdminCustomServers(currentServers);
+
+      const drKeysMap: Record<string, string> = {};
+      const rafiqKeysMap: Record<string, string> = {};
+      const drModelMap: Record<string, string> = {};
+      const rafiqModelMap: Record<string, string> = {};
+
       const loadKeys = (primary: string, fallback: string, defaultVal: string): string => {
         try {
           const saved = localStorage.getItem(primary);
@@ -288,127 +331,173 @@ export default function App() {
         } catch {}
         return localStorage.getItem(fallback) || defaultVal;
       };
-      
-      setAdminDrKeysText(loadKeys("admin_doctor_api_keys", "admin_doctor_api_key", "sk-hLwMhHmK84UppzziebKMn5"));
-      setAdminRafiqKeysText(loadKeys("admin_rafiq_api_keys", "admin_rafiq_api_key", "sk-VUgfFKWUMeimyDihMFBJVj"));
-      setAdminBmDrKeysText(loadKeys("admin_bluesminds_doctor_keys", "admin_bluesminds_doctor_key", "VFnpPZlpu0iFyQkJtHF7HNfjjmn5FXJd9K2BV"));
-      setAdminBmRafiqKeysText(loadKeys("admin_bluesminds_rafiq_keys", "admin_bluesminds_rafiq_key", "VFnpPZlpu0iFyQkJtHF7HNfjjmn5FXJd9K2BV"));
-      setAdminKfDrKeysText(loadKeys("admin_keysfan_doctor_keys", "admin_keysfan_doctor_key", ""));
-      setAdminKfRafiqKeysText(loadKeys("admin_keysfan_rafiq_keys", "admin_keysfan_rafiq_key", ""));
-      
-      const drModel = localStorage.getItem("admin_doctor_model") || "gemini-2.5-flash";
-      const rafiqModel = localStorage.getItem("admin_rafiq_model") || "gemini-2.5-flash";
-      const bmDrModel = localStorage.getItem("admin_bluesminds_doctor_model") || "gemini-2.5-flash";
-      const bmRafiqModel = localStorage.getItem("admin_bluesminds_rafiq_model") || "gemini-2.5-flash";
-      const kfDrModel = localStorage.getItem("admin_keysfan_doctor_model") || "gemini-2.5-flash";
-      const kfRafiqModel = localStorage.getItem("admin_keysfan_rafiq_model") || "gemini-2.5-flash";
+
+      currentServers.forEach(srv => {
+        let drKeysKey = `admin_${srv.id}_doctor_api_keys`;
+        let rafiqKeysKey = `admin_${srv.id}_rafiq_api_keys`;
+        let drModelKey = `admin_${srv.id}_doctor_model`;
+        let rafiqModelKey = `admin_${srv.id}_rafiq_model`;
+
+        if (srv.id === "manus") {
+          drKeysKey = "admin_doctor_api_keys";
+          rafiqKeysKey = "admin_rafiq_api_keys";
+          drModelKey = "admin_doctor_model";
+          rafiqModelKey = "admin_rafiq_model";
+        } else if (srv.id === "bluesminds") {
+          drKeysKey = "admin_bluesminds_doctor_keys";
+          rafiqKeysKey = "admin_bluesminds_rafiq_keys";
+          drModelKey = "admin_bluesminds_doctor_model";
+          rafiqModelKey = "admin_bluesminds_rafiq_model";
+        } else if (srv.id === "keysfan") {
+          drKeysKey = "admin_keysfan_doctor_keys";
+          rafiqKeysKey = "admin_keysfan_rafiq_keys";
+          drModelKey = "admin_keysfan_doctor_model";
+          rafiqModelKey = "admin_keysfan_rafiq_model";
+        }
+
+        let defaultKey = "";
+        if (srv.id === "bluesminds") defaultKey = "VFnpPZlpu0iFyQkJtHF7HNfjjmn5FXJd9K2BV";
+        else if (srv.id === "manus") defaultKey = "sk-hLwMhHmK84UppzziebKMn5";
+
+        let defaultRafiqKey = defaultKey;
+        if (srv.id === "manus") defaultRafiqKey = "sk-VUgfFKWUMeimyDihMFBJVj";
+
+        drKeysMap[srv.id] = loadKeys(drKeysKey, `admin_${srv.id}_doctor_api_key`, defaultKey);
+        rafiqKeysMap[srv.id] = loadKeys(rafiqKeysKey, `admin_${srv.id}_rafiq_api_key`, defaultRafiqKey);
+
+        const drModel = localStorage.getItem(drModelKey) || "gemini-2.5-flash";
+        const rafiqModel = localStorage.getItem(rafiqModelKey) || "gemini-2.5-flash";
+
+        drModelMap[srv.id] = drModel;
+        rafiqModelMap[srv.id] = rafiqModel;
+
+      });
+
+      setServerDrKeys(drKeysMap);
+      setServerRafiqKeys(rafiqKeysMap);
+      setServerDrModel(drModelMap);
+      setServerRafiqModel(rafiqModelMap);
+
       const puterModel = localStorage.getItem("admin_puter_model") || "gemini-3-flash-preview";
-      
-      setAdminDrModel(drModel);
-      setAdminRafiqModel(rafiqModel);
-      setAdminBmDrModel(bmDrModel);
-      setAdminBmRafiqModel(bmRafiqModel);
-      setAdminKfDrModel(kfDrModel);
-      setAdminKfRafiqModel(kfRafiqModel);
       setAdminPuterModel(puterModel);
 
+      const allIds = currentServers.map(s => s.id);
+      let order: string[] = [...allIds];
       try {
         const orderSaved = localStorage.getItem("admin_servers_order");
         if (orderSaved) {
           const parsed = JSON.parse(orderSaved);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const validOrder = parsed.filter((s: string) => ALL_SERVER_IDS.includes(s as ServerId)) as ServerId[];
-            const missing = ALL_SERVER_IDS.filter(s => !validOrder.includes(s));
-            setAdminServersOrder([...validOrder, ...missing]);
+            const valid = parsed.filter((s: string) => allIds.includes(s));
+            const missing = allIds.filter(s => !valid.includes(s));
+            order = [...valid, ...missing];
           }
         }
       } catch {}
+      setAdminServersOrder(order);
 
+      let disabled: string[] = [];
       try {
         const disabledSaved = localStorage.getItem("admin_servers_disabled");
         if (disabledSaved) {
           const parsed = JSON.parse(disabledSaved);
           if (Array.isArray(parsed)) {
-            setAdminServersDisabled(new Set(parsed.filter((s: string) => ALL_SERVER_IDS.includes(s as ServerId)) as ServerId[]));
+            disabled = parsed.filter((s: string) => allIds.includes(s));
           }
         }
       } catch {}
-
-      if (drModel && !manusDoctorModels.includes(drModel)) setManusDoctorModels(prev => [...prev, drModel]);
-      if (rafiqModel && !manusRafiqModels.includes(rafiqModel)) setManusRafiqModels(prev => [...prev, rafiqModel]);
-      if (bmDrModel && !bmDoctorModels.includes(bmDrModel)) setBmDoctorModels(prev => [...prev, bmDrModel]);
-      if (bmRafiqModel && !bmRafiqModels.includes(bmRafiqModel)) setBmRafiqModels(prev => [...prev, bmRafiqModel]);
-      if (kfDrModel && !kfDoctorModels.includes(kfDrModel)) setKfDoctorModels(prev => [...prev, kfDrModel]);
-      if (kfRafiqModel && !kfRafiqModels.includes(kfRafiqModel)) setKfRafiqModels(prev => [...prev, kfRafiqModel]);
+      setAdminServersDisabled(new Set(disabled));
     } else {
       setAdminError("رمز المرور غير صحيح! حاول مرة أخرى.");
     }
   };
 
   const handleSaveAdminSettings = async () => {
-    const cleanedDrKeys = adminDrKeysText.split('\n').map(k => k.trim()).filter(k => k !== "");
-    const cleanedRafiqKeys = adminRafiqKeysText.split('\n').map(k => k.trim()).filter(k => k !== "");
-    const cleanedBmDrKeys = adminBmDrKeysText.split('\n').map(k => k.trim()).filter(k => k !== "");
-    const cleanedBmRafiqKeys = adminBmRafiqKeysText.split('\n').map(k => k.trim()).filter(k => k !== "");
-    const cleanedKfDrKeys = adminKfDrKeysText.split('\n').map(k => k.trim()).filter(k => k !== "");
-    const cleanedKfRafiqKeys = adminKfRafiqKeysText.split('\n').map(k => k.trim()).filter(k => k !== "");
+    localStorage.setItem("admin_custom_servers", JSON.stringify(adminCustomServers));
 
-    localStorage.setItem("admin_doctor_api_keys", JSON.stringify(cleanedDrKeys));
-    localStorage.setItem("admin_rafiq_api_keys", JSON.stringify(cleanedRafiqKeys));
-    localStorage.setItem("admin_doctor_api_key", cleanedDrKeys[0] || "");
-    localStorage.setItem("admin_rafiq_api_key", cleanedRafiqKeys[0] || "");
-    localStorage.setItem("admin_doctor_model", adminDrModel.trim());
-    localStorage.setItem("admin_rafiq_model", adminRafiqModel.trim());
+    adminCustomServers.forEach(srv => {
+      let drKeysKey = `admin_${srv.id}_doctor_api_keys`;
+      let rafiqKeysKey = `admin_${srv.id}_rafiq_api_keys`;
+      let drModelKey = `admin_${srv.id}_doctor_model`;
+      let rafiqModelKey = `admin_${srv.id}_rafiq_model`;
 
-    localStorage.setItem("admin_bluesminds_doctor_keys", JSON.stringify(cleanedBmDrKeys));
-    localStorage.setItem("admin_bluesminds_rafiq_keys", JSON.stringify(cleanedBmRafiqKeys));
-    localStorage.setItem("admin_bluesminds_doctor_key", cleanedBmDrKeys[0] || "");
-    localStorage.setItem("admin_bluesminds_rafiq_key", cleanedBmRafiqKeys[0] || "");
-    localStorage.setItem("admin_bluesminds_doctor_model", adminBmDrModel.trim());
-    localStorage.setItem("admin_bluesminds_rafiq_model", adminBmRafiqModel.trim());
+      if (srv.id === "manus") {
+        drKeysKey = "admin_doctor_api_keys";
+        rafiqKeysKey = "admin_rafiq_api_keys";
+        drModelKey = "admin_doctor_model";
+        rafiqModelKey = "admin_rafiq_model";
+      } else if (srv.id === "bluesminds") {
+        drKeysKey = "admin_bluesminds_doctor_keys";
+        rafiqKeysKey = "admin_bluesminds_rafiq_keys";
+        drModelKey = "admin_bluesminds_doctor_model";
+        rafiqModelKey = "admin_bluesminds_rafiq_model";
+      } else if (srv.id === "keysfan") {
+        drKeysKey = "admin_keysfan_doctor_keys";
+        rafiqKeysKey = "admin_keysfan_rafiq_keys";
+        drModelKey = "admin_keysfan_doctor_model";
+        rafiqModelKey = "admin_keysfan_rafiq_model";
+      }
 
-    localStorage.setItem("admin_keysfan_doctor_keys", JSON.stringify(cleanedKfDrKeys));
-    localStorage.setItem("admin_keysfan_rafiq_keys", JSON.stringify(cleanedKfRafiqKeys));
-    localStorage.setItem("admin_keysfan_doctor_key", cleanedKfDrKeys[0] || "");
-    localStorage.setItem("admin_keysfan_rafiq_key", cleanedKfRafiqKeys[0] || "");
-    localStorage.setItem("admin_keysfan_doctor_model", adminKfDrModel.trim());
-    localStorage.setItem("admin_keysfan_rafiq_model", adminKfRafiqModel.trim());
+      const drKeys = (serverDrKeys[srv.id] || "").split('\n').map(k => k.trim()).filter(k => k !== "");
+      const rafiqKeys = (serverRafiqKeys[srv.id] || "").split('\n').map(k => k.trim()).filter(k => k !== "");
+
+      localStorage.setItem(drKeysKey, JSON.stringify(drKeys));
+      localStorage.setItem(rafiqKeysKey, JSON.stringify(rafiqKeys));
+      localStorage.setItem(`admin_${srv.id}_doctor_api_key`, drKeys[0] || "");
+      localStorage.setItem(`admin_${srv.id}_rafiq_api_key`, rafiqKeys[0] || "");
+      localStorage.setItem(drModelKey, (serverDrModel[srv.id] || "").trim());
+      localStorage.setItem(rafiqModelKey, (serverRafiqModel[srv.id] || "").trim());
+    });
 
     localStorage.setItem("admin_puter_model", adminPuterModel.trim());
-
     localStorage.setItem("admin_servers_order", JSON.stringify(adminServersOrder));
     localStorage.setItem("admin_servers_disabled", JSON.stringify([...adminServersDisabled]));
-    
+
     alert("تم حفظ الإعدادات محلياً! جاري المزامنة السحابية لتحديثها لكافة زوار الموقع...");
-    
+
     try {
-      const config = [
-        { key: "doctor_api_keys", value: JSON.stringify(cleanedDrKeys) },
-        { key: "rafiq_api_keys", value: JSON.stringify(cleanedRafiqKeys) },
-        { key: "doctor_api_key", value: cleanedDrKeys[0] || "" },
-        { key: "rafiq_api_key", value: cleanedRafiqKeys[0] || "" },
-        { key: "doctor_model", value: adminDrModel.trim() },
-        { key: "rafiq_model", value: adminRafiqModel.trim() },
-
-        { key: "bluesminds_doctor_keys", value: JSON.stringify(cleanedBmDrKeys) },
-        { key: "bluesminds_rafiq_keys", value: JSON.stringify(cleanedBmRafiqKeys) },
-        { key: "bluesminds_doctor_key", value: cleanedBmDrKeys[0] || "" },
-        { key: "bluesminds_rafiq_key", value: cleanedBmRafiqKeys[0] || "" },
-        { key: "bluesminds_doctor_model", value: adminBmDrModel.trim() },
-        { key: "bluesminds_rafiq_model", value: adminBmRafiqModel.trim() },
-
-        { key: "keysfan_doctor_keys", value: JSON.stringify(cleanedKfDrKeys) },
-        { key: "keysfan_rafiq_keys", value: JSON.stringify(cleanedKfRafiqKeys) },
-        { key: "keysfan_doctor_key", value: cleanedKfDrKeys[0] || "" },
-        { key: "keysfan_rafiq_key", value: cleanedKfRafiqKeys[0] || "" },
-        { key: "keysfan_doctor_model", value: adminKfDrModel.trim() },
-        { key: "keysfan_rafiq_model", value: adminKfRafiqModel.trim() },
-
+      const config: { key: string, value: string }[] = [
+        { key: "custom_servers", value: JSON.stringify(adminCustomServers) },
         { key: "puter_model", value: adminPuterModel.trim() },
-
         { key: "servers_order", value: JSON.stringify(adminServersOrder) },
         { key: "servers_disabled", value: JSON.stringify([...adminServersDisabled]) },
       ];
+
+      adminCustomServers.forEach(srv => {
+        let drKeysKey = `${srv.id}_doctor_api_keys`;
+        let rafiqKeysKey = `${srv.id}_rafiq_api_keys`;
+        let drModelKey = `${srv.id}_doctor_model`;
+        let rafiqModelKey = `${srv.id}_rafiq_model`;
+
+        if (srv.id === "manus") {
+          drKeysKey = "doctor_api_keys";
+          rafiqKeysKey = "rafiq_api_keys";
+          drModelKey = "doctor_model";
+          rafiqModelKey = "rafiq_model";
+        } else if (srv.id === "bluesminds") {
+          drKeysKey = "bluesminds_doctor_keys";
+          rafiqKeysKey = "bluesminds_rafiq_keys";
+          drModelKey = "bluesminds_doctor_model";
+          rafiqModelKey = "bluesminds_rafiq_model";
+        } else if (srv.id === "keysfan") {
+          drKeysKey = "keysfan_doctor_keys";
+          rafiqKeysKey = "keysfan_rafiq_keys";
+          drModelKey = "keysfan_doctor_model";
+          rafiqModelKey = "keysfan_rafiq_model";
+        }
+
+        const drKeys = (serverDrKeys[srv.id] || "").split('\n').map(k => k.trim()).filter(k => k !== "");
+        const rafiqKeys = (serverRafiqKeys[srv.id] || "").split('\n').map(k => k.trim()).filter(k => k !== "");
+
+        config.push(
+          { key: drKeysKey, value: JSON.stringify(drKeys) },
+          { key: rafiqKeysKey, value: JSON.stringify(rafiqKeys) },
+          { key: `${srv.id}_doctor_key`, value: drKeys[0] || "" },
+          { key: `${srv.id}_rafiq_key`, value: rafiqKeys[0] || "" },
+          { key: drModelKey, value: (serverDrModel[srv.id] || "").trim() },
+          { key: rafiqModelKey, value: (serverRafiqModel[srv.id] || "").trim() }
+        );
+      });
 
       for (const item of config) {
         await fetch(`/api/kv/${item.key}`, {
@@ -425,25 +514,41 @@ export default function App() {
 
   const handleResetAdminSettings = async () => {
     const allLocalKeys = [
-      "admin_doctor_api_key", "admin_rafiq_api_key",
-      "admin_doctor_api_keys", "admin_rafiq_api_keys",
-      "admin_doctor_model", "admin_rafiq_model",
-      "admin_bluesminds_doctor_key", "admin_bluesminds_rafiq_key",
-      "admin_bluesminds_doctor_keys", "admin_bluesminds_rafiq_keys",
-      "admin_bluesminds_doctor_model", "admin_bluesminds_rafiq_model",
-      "admin_keysfan_doctor_key", "admin_keysfan_rafiq_key",
-      "admin_keysfan_doctor_keys", "admin_keysfan_rafiq_keys",
-      "admin_keysfan_doctor_model", "admin_keysfan_rafiq_model",
+      "admin_custom_servers",
       "admin_puter_model",
       "admin_servers_order", "admin_servers_disabled",
       "admin_server_disabled", "admin_server_priority",
     ];
+
+    adminCustomServers.forEach(srv => {
+      allLocalKeys.push(
+        `admin_${srv.id}_doctor_api_keys`,
+        `admin_${srv.id}_rafiq_api_keys`,
+        `admin_${srv.id}_doctor_api_key`,
+        `admin_${srv.id}_rafiq_api_key`,
+        `admin_${srv.id}_doctor_model`,
+        `admin_${srv.id}_rafiq_model`,
+        "admin_doctor_api_key", "admin_rafiq_api_key",
+        "admin_doctor_api_keys", "admin_rafiq_api_keys",
+        "admin_doctor_model", "admin_rafiq_model",
+        "admin_bluesminds_doctor_key", "admin_bluesminds_rafiq_key",
+        "admin_bluesminds_doctor_keys", "admin_bluesminds_rafiq_keys",
+        "admin_bluesminds_doctor_model", "admin_bluesminds_rafiq_model",
+        "admin_keysfan_doctor_key", "admin_keysfan_rafiq_key",
+        "admin_keysfan_doctor_keys", "admin_keysfan_rafiq_keys",
+        "admin_keysfan_doctor_model", "admin_keysfan_rafiq_model"
+      );
+    });
+
     for (const k of allLocalKeys) localStorage.removeItem(k);
     
     alert("تمت إعادة التعيين محلياً! جاري إزالة الإعدادات من السحابة لتعود لوضعها الافتراضي لكافة زوار الموقع...");
     
     try {
       const remoteKeys = [
+        "custom_servers",
+        "puter_model",
+        "servers_order", "servers_disabled",
         "doctor_api_key", "rafiq_api_key", "doctor_api_keys", "rafiq_api_keys",
         "doctor_model", "rafiq_model",
         "bluesminds_doctor_key", "bluesminds_rafiq_key",
@@ -452,8 +557,6 @@ export default function App() {
         "keysfan_doctor_key", "keysfan_rafiq_key",
         "keysfan_doctor_keys", "keysfan_rafiq_keys",
         "keysfan_doctor_model", "keysfan_rafiq_model",
-        "puter_model",
-        "servers_order", "servers_disabled",
       ];
       for (const k of remoteKeys) {
         await fetch(`/api/kv/${k}`, {
@@ -472,33 +575,75 @@ export default function App() {
   useEffect(() => {
     const syncGlobalConfig = async () => {
       try {
+        const srvRes = await fetch(`/api/kv/custom_servers`, { signal: AbortSignal.timeout(6000) });
+        let activeServers = DEFAULT_SERVERS;
+        if (srvRes.ok) {
+          const enc = await srvRes.text();
+          if (enc && enc.trim() !== "") {
+            const dec = decodeVal(enc);
+            localStorage.setItem("admin_custom_servers", dec);
+            try {
+              activeServers = JSON.parse(dec);
+            } catch {}
+          }
+        }
+
         const keys = [
-          { local: "admin_doctor_api_key", remote: "doctor_api_key" },
-          { local: "admin_rafiq_api_key", remote: "rafiq_api_key" },
-          { local: "admin_doctor_api_keys", remote: "doctor_api_keys" },
-          { local: "admin_rafiq_api_keys", remote: "rafiq_api_keys" },
-          { local: "admin_doctor_model", remote: "doctor_model" },
-          { local: "admin_rafiq_model", remote: "rafiq_model" },
-
-          { local: "admin_bluesminds_doctor_key", remote: "bluesminds_doctor_key" },
-          { local: "admin_bluesminds_rafiq_key", remote: "bluesminds_rafiq_key" },
-          { local: "admin_bluesminds_doctor_keys", remote: "bluesminds_doctor_keys" },
-          { local: "admin_bluesminds_rafiq_keys", remote: "bluesminds_rafiq_keys" },
-          { local: "admin_bluesminds_doctor_model", remote: "bluesminds_doctor_model" },
-          { local: "admin_bluesminds_rafiq_model", remote: "bluesminds_rafiq_model" },
-
-          { local: "admin_keysfan_doctor_key", remote: "keysfan_doctor_key" },
-          { local: "admin_keysfan_rafiq_key", remote: "keysfan_rafiq_key" },
-          { local: "admin_keysfan_doctor_keys", remote: "keysfan_doctor_keys" },
-          { local: "admin_keysfan_rafiq_keys", remote: "keysfan_rafiq_keys" },
-          { local: "admin_keysfan_doctor_model", remote: "keysfan_doctor_model" },
-          { local: "admin_keysfan_rafiq_model", remote: "keysfan_rafiq_model" },
-
           { local: "admin_puter_model", remote: "puter_model" },
-
           { local: "admin_servers_order", remote: "servers_order" },
           { local: "admin_servers_disabled", remote: "servers_disabled" },
         ];
+
+        activeServers.forEach(srv => {
+          let drKeysKey = `admin_${srv.id}_doctor_api_keys`;
+          let rafiqKeysKey = `admin_${srv.id}_rafiq_api_keys`;
+          let drModelKey = `admin_${srv.id}_doctor_model`;
+          let rafiqModelKey = `admin_${srv.id}_rafiq_model`;
+
+          let rDrKeysKey = `${srv.id}_doctor_api_keys`;
+          let rRafiqKeysKey = `${srv.id}_rafiq_api_keys`;
+          let rDrModelKey = `${srv.id}_doctor_model`;
+          let rRafiqModelKey = `${srv.id}_rafiq_model`;
+
+          if (srv.id === "manus") {
+            drKeysKey = "admin_doctor_api_keys";
+            rafiqKeysKey = "admin_rafiq_api_keys";
+            drModelKey = "admin_doctor_model";
+            rafiqModelKey = "admin_rafiq_model";
+
+            rDrKeysKey = "doctor_api_keys";
+            rRafiqKeysKey = "rafiq_api_keys";
+            rDrModelKey = "doctor_model";
+            rRafiqModelKey = "rafiq_model";
+          } else if (srv.id === "bluesminds") {
+            drKeysKey = "admin_bluesminds_doctor_keys";
+            rafiqKeysKey = "admin_bluesminds_rafiq_keys";
+            drModelKey = "admin_bluesminds_doctor_model";
+            rafiqModelKey = "admin_bluesminds_rafiq_model";
+
+            rDrKeysKey = "bluesminds_doctor_keys";
+            rRafiqKeysKey = "bluesminds_rafiq_keys";
+            rDrModelKey = "bluesminds_doctor_model";
+            rRafiqModelKey = "bluesminds_rafiq_model";
+          } else if (srv.id === "keysfan") {
+            drKeysKey = "admin_keysfan_doctor_keys";
+            rafiqKeysKey = "admin_keysfan_rafiq_keys";
+            drModelKey = "admin_keysfan_doctor_model";
+            rafiqModelKey = "admin_keysfan_rafiq_model";
+
+            rDrKeysKey = "keysfan_doctor_keys";
+            rRafiqKeysKey = "keysfan_rafiq_keys";
+            rDrModelKey = "keysfan_doctor_model";
+            rRafiqModelKey = "keysfan_rafiq_model";
+          }
+
+          keys.push(
+            { local: drKeysKey, remote: rDrKeysKey },
+            { local: rafiqKeysKey, remote: rRafiqKeysKey },
+            { local: drModelKey, remote: rDrModelKey },
+            { local: rafiqModelKey, remote: rRafiqModelKey }
+          );
+        });
         
         for (const k of keys) {
           const res = await fetch(`/api/kv/${k.remote}`, { signal: AbortSignal.timeout(6000) });
@@ -703,7 +848,123 @@ export default function App() {
             /* Settings Page */
             <div className="space-y-6 pt-2">
 
-                            {/* Server Controls Section */}
+                            {/* Custom Servers Management Section */}
+              <div className="p-4 rounded-2xl border space-y-4" style={{ background: P.bg, borderColor: P.border }}>
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-[14px]" style={{ color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}>⚙️ زیادکردن و ڕێکخستنی سێرڤەرەکان</h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddServerForm(!showAddServerForm)}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold border flex items-center gap-1 cursor-pointer transition-all hover:bg-black/5 dark:hover:bg-white/5"
+                    style={{ color: P.text, borderColor: P.border, background: P.card }}
+                  >
+                    <Plus size={12} />
+                    <span>سێرڤەری نوێ</span>
+                  </button>
+                </div>
+
+                {/* Add Server Form */}
+                {showAddServerForm && (
+                  <div className="p-3 rounded-xl border space-y-3" style={{ background: P.card, borderColor: P.border }}>
+                    <h5 className="text-[12px] font-bold" style={{ color: P.text, fontFamily: "'Noto Kufi Arabic'" }}>➕ زیادکردني سێرڤەري نوێ</h5>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[10px] block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>ناو</label>
+                        <input
+                          type="text"
+                          value={newServerName}
+                          onChange={(e) => setNewServerName(e.target.value)}
+                          placeholder="Nav..."
+                          className="w-full px-2 py-1.5 rounded-lg text-[12px] outline-none border"
+                          style={{ background: P.bg, borderColor: P.border, color: P.text }}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>ئایکۆن</label>
+                        <input
+                          type="text"
+                          value={newServerIcon}
+                          onChange={(e) => setNewServerIcon(e.target.value)}
+                          placeholder="🌐"
+                          className="w-full px-2 py-1.5 rounded-lg text-[12px] outline-none border text-center"
+                          style={{ background: P.bg, borderColor: P.border, color: P.text }}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>ناونیشانی API URL</label>
+                        <input
+                          type="text"
+                          value={newServerUrl}
+                          onChange={(e) => setNewServerUrl(e.target.value)}
+                          placeholder="https://..."
+                          className="w-full px-2 py-1.5 rounded-lg text-[12px] outline-none border"
+                          style={{ background: P.bg, borderColor: P.border, color: P.text, fontFamily: "monospace" }}
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddCustomServer}
+                      className="w-full py-1.5 rounded-lg font-bold text-[11px] text-white cursor-pointer"
+                      style={{ background: P.sendBtn, fontFamily: "'Noto Kufi Arabic'" }}
+                    >
+                      تۆمارکردن
+                    </button>
+                  </div>
+                )}
+
+                {/* Edit Server Form */}
+                {editingServerId && (
+                  <div className="p-3 rounded-xl border space-y-3" style={{ background: P.card, borderColor: P.border }}>
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-[12px] font-bold" style={{ color: P.text, fontFamily: "'Noto Kufi Arabic'" }}>✏️ دەستکاریکردني سێرڤەر</h5>
+                      <button type="button" onClick={() => setEditingServerId(null)} className="text-red-500 hover:opacity-85"><X size={14} /></button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[10px] block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>ناو</label>
+                        <input
+                          type="text"
+                          value={editServerName}
+                          onChange={(e) => setEditServerName(e.target.value)}
+                          className="w-full px-2 py-1.5 rounded-lg text-[12px] outline-none border"
+                          style={{ background: P.bg, borderColor: P.border, color: P.text }}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>ئایکۆن</label>
+                        <input
+                          type="text"
+                          value={editServerIcon}
+                          onChange={(e) => setEditServerIcon(e.target.value)}
+                          className="w-full px-2 py-1.5 rounded-lg text-[12px] outline-none border text-center"
+                          style={{ background: P.bg, borderColor: P.border, color: P.text }}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>ناونیشانی API URL</label>
+                        <input
+                          type="text"
+                          value={editServerUrl}
+                          onChange={(e) => setEditServerUrl(e.target.value)}
+                          className="w-full px-2 py-1.5 rounded-lg text-[12px] outline-none border"
+                          style={{ background: P.bg, borderColor: P.border, color: P.text, fontFamily: "monospace" }}
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleUpdateCustomServer}
+                      className="w-full py-1.5 rounded-lg font-bold text-[11px] text-white cursor-pointer"
+                      style={{ background: P.sendBtn, fontFamily: "'Noto Kufi Arabic'" }}
+                    >
+                      پاشەکەوتکردنی نوێکاریەکان
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Server Controls Section */}
               <div className="p-4 rounded-2xl border space-y-4" style={{ background: P.bg, borderColor: P.border }}>
                 <h4 className="font-bold text-[14px]" style={{ color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}>🎛️ ڕیزبەندکردن و کۆنتڕۆڵی سێرڤەرەکان</h4>
                 <p className="text-[11px]" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>
@@ -712,12 +973,10 @@ export default function App() {
 
                 <div className="space-y-2.5">
                   {adminServersOrder.map((serverId, idx) => {
+                    const srv = adminCustomServers.find(s => s.id === serverId);
+                    if (!srv) return null;
+
                     const isDisabled = adminServersDisabled.has(serverId);
-                    let label = "";
-                    let icon = null;
-                    if (serverId === "keysfan") { label = "سێرڤەری KeysFan.ai"; icon = "🔑"; }
-                    else if (serverId === "bluesminds") { label = "سێرڤەری Bluesminds"; icon = "🌿"; }
-                    else if (serverId === "manus") { label = "سێرڤەری Manus"; icon = "🤖"; }
 
                     return (
                       <div 
@@ -729,19 +988,48 @@ export default function App() {
                           opacity: isDisabled ? 0.6 : 1
                         }}
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="text-[16px]">{icon}</span>
-                          <span className="text-[13px] font-bold" style={{ color: P.text, fontFamily: "'Noto Kufi Arabic'" }}>
-                            {label}
-                          </span>
-                          {isDisabled && (
-                            <span className="text-[9px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 font-semibold" style={{ fontFamily: "'Noto Kufi Arabic'" }}>
-                              کوژاوەتەوە
+                        <div className="flex-1 min-w-0 pr-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[16px]">{srv.icon}</span>
+                            <span className="text-[13px] font-bold truncate" style={{ color: P.text, fontFamily: "'Noto Kufi Arabic'" }}>
+                              {srv.name}
                             </span>
-                          )}
+                            {isDisabled && (
+                              <span className="text-[9px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 font-semibold shrink-0" style={{ fontFamily: "'Noto Kufi Arabic'" }}>
+                                کوژاوەتەوە
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] truncate text-left mt-1" style={{ color: P.text2, fontFamily: "monospace" }}>
+                            {srv.baseUrl}
+                          </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {/* Edit / Delete Buttons */}
+                          <div className="flex items-center border rounded-lg overflow-hidden mr-1" style={{ borderColor: P.border }}>
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditServer(srv)}
+                              className="p-1.5 hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer text-[11px]"
+                              style={{ color: P.text, fontFamily: "'Noto Kufi Arabic'" }}
+                              title="تعديل"
+                            >
+                              ✏️
+                            </button>
+                            {!srv.isDefault && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCustomServer(srv.id)}
+                                className="p-1.5 hover:bg-black/5 dark:hover:bg-white/5 border-r cursor-pointer text-[11px]"
+                                style={{ color: P.text, borderColor: P.border, fontFamily: "'Noto Kufi Arabic'" }}
+                                title="حذف"
+                              >
+                                🗑️
+                              </button>
+                            )}
+                          </div>
+
                           {/* Reorder Buttons */}
                           <div className="flex items-center border rounded-lg overflow-hidden" style={{ borderColor: P.border }}>
                             <button
@@ -785,294 +1073,111 @@ export default function App() {
 
               {/* Dynamic sorted API sections */}
               {adminServersOrder.map((serverId) => {
-                if (serverId === "keysfan") {
-                  return (
-                    <div key="keysfan" className="p-4 rounded-2xl border space-y-4" style={{ background: P.bg, borderColor: P.border }}>
-                      <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: P.border }}>
-                        <h4 className="font-bold text-[14px]" style={{ color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}>🔑 سێرڤەری KeysFan.ai</h4>
-                        {adminServersDisabled.has("keysfan") && (
-                          <span className="text-[10px] text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-full" style={{ fontFamily: "'Noto Kufi Arabic'" }}>کوژاوەتەوە</span>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Doctor Keys */}
-                        <KeyChipsInput
-                          value={adminKfDrKeysText}
-                          onChange={setAdminKfDrKeysText}
-                          label="کلیلەکانی دکتۆر (KeysFan)"
-                          placeholder="مفتاح API جديد..."
-                          maxKeys={100}
-                          palette={P}
-                          dark={dark}
-                          onTestKey={(key) => testApiKey('keysfan', key)}
-                        />
-                        {/* Rafiq Keys */}
-                        <KeyChipsInput
-                          value={adminKfRafiqKeysText}
-                          onChange={setAdminKfRafiqKeysText}
-                          label="کلیلەکانی ڕەفیق (KeysFan)"
-                          placeholder="مفتاح API جديد..."
-                          maxKeys={100}
-                          palette={P}
-                          dark={dark}
-                          onTestKey={(key) => testApiKey('keysfan', key)}
-                        />
-                      </div>
+                const srv = adminCustomServers.find(s => s.id === serverId);
+                if (!srv) return null;
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Doctor Model */}
-                        <div className="space-y-1.5">
-                          <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مۆدێلی دکتۆر (Doctor Model)</label>
-                          <div className="flex gap-2">
-                            <input 
-                              type="text"
-                              value={adminKfDrModel}
-                              onChange={(e) => setAdminKfDrModel(e.target.value)}
-                              placeholder="gemini-2.5-flash..."
-                              className="flex-1 px-4 py-2.5 rounded-xl text-[13px] font-medium outline-none transition-all"
-                              style={{ 
-                                background: P.card, 
-                                border: `1px solid ${P.border}`, 
-                                color: P.text,
-                                fontFamily: "monospace"
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => fetchLatestModels('keysfan', 'doctor')}
-                              disabled={fetchingKfDrModels}
-                              className="px-3 rounded-xl text-[11px] font-bold border cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-all"
-                              style={{ color: P.text, borderColor: P.border, background: P.card }}
-                            >
-                              {fetchingKfDrModels ? "جاري..." : "جلب"}
-                            </button>
-                          </div>
+                const drKeysValue = serverDrKeys[serverId] || "";
+                const rafiqKeysValue = serverRafiqKeys[serverId] || "";
+                const drModelValue = serverDrModel[serverId] || "";
+                const rafiqModelValue = serverRafiqModel[serverId] || "";
+                const isLoaderDr = fetchingModelsMap[`${serverId}-doctor`] || false;
+                const isLoaderRafiq = fetchingModelsMap[`${serverId}-rafiq`] || false;
+
+                return (
+                  <div key={serverId} className="p-4 rounded-2xl border space-y-4" style={{ background: P.bg, borderColor: P.border }}>
+                    <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: P.border }}>
+                      <h4 className="font-bold text-[14px]" style={{ color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}>
+                        {srv.icon} سێرڤەری {srv.name}
+                      </h4>
+                      {adminServersDisabled.has(serverId) && (
+                        <span className="text-[10px] text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-full" style={{ fontFamily: "'Noto Kufi Arabic'" }}>کوژاوەتەوە</span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Doctor Keys */}
+                      <KeyChipsInput
+                        value={drKeysValue}
+                        onChange={(val) => setServerDrKeys(prev => ({ ...prev, [serverId]: val }))}
+                        label={`کلیلەکانی دکتۆر (${srv.name})`}
+                        placeholder="مفتاح API جديد..."
+                        maxKeys={100}
+                        palette={P}
+                        dark={dark}
+                        onTestKey={(key) => testApiKey(srv.baseUrl, key)}
+                      />
+                      {/* Rafiq Keys */}
+                      <KeyChipsInput
+                        value={rafiqKeysValue}
+                        onChange={(val) => setServerRafiqKeys(prev => ({ ...prev, [serverId]: val }))}
+                        label={`کلیلەکانی ڕەفیق (${srv.name})`}
+                        placeholder="مفتاح API جديد..."
+                        maxKeys={100}
+                        palette={P}
+                        dark={dark}
+                        onTestKey={(key) => testApiKey(srv.baseUrl, key)}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Doctor Model */}
+                      <div className="space-y-1.5">
+                        <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مۆدێلی دکتۆر (Doctor Model)</label>
+                        <div className="flex gap-2">
+                          <input 
+                            type="text"
+                            value={drModelValue}
+                            onChange={(e) => setServerDrModel(prev => ({ ...prev, [serverId]: e.target.value }))}
+                            placeholder="gemini-2.5-flash..."
+                            className="flex-1 px-4 py-2.5 rounded-xl text-[13px] font-medium outline-none transition-all"
+                            style={{ 
+                              background: P.card, 
+                              border: `1px solid ${P.border}`, 
+                              color: P.text,
+                              fontFamily: "monospace"
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => fetchLatestModels(serverId, srv.baseUrl, 'doctor')}
+                            disabled={isLoaderDr}
+                            className="px-3 rounded-xl text-[11px] font-bold border cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+                            style={{ color: P.text, borderColor: P.border, background: P.card }}
+                          >
+                            {isLoaderDr ? "جاري..." : "جلب"}
+                          </button>
                         </div>
-                        {/* Rafiq Model */}
-                        <div className="space-y-1.5">
-                          <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مۆدێلی ڕەفیق (Rafiq Model)</label>
-                          <div className="flex gap-2">
-                            <input 
-                              type="text"
-                              value={adminKfRafiqModel}
-                              onChange={(e) => setAdminKfRafiqModel(e.target.value)}
-                              placeholder="gemini-2.5-flash..."
-                              className="flex-1 px-4 py-2.5 rounded-xl text-[13px] font-medium outline-none transition-all"
-                              style={{ 
-                                background: P.card, 
-                                border: `1px solid ${P.border}`, 
-                                color: P.text,
-                                fontFamily: "monospace"
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => fetchLatestModels('keysfan', 'rafiq')}
-                              disabled={fetchingKfRafiqModels}
-                              className="px-3 rounded-xl text-[11px] font-bold border cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-all"
-                              style={{ color: P.text, borderColor: P.border, background: P.card }}
-                            >
-                              {fetchingKfRafiqModels ? "جاري..." : "جلب"}
-                            </button>
-                          </div>
+                      </div>
+                      {/* Rafiq Model */}
+                      <div className="space-y-1.5">
+                        <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مۆدێلی ڕەفیق (Rafiq Model)</label>
+                        <div className="flex gap-2">
+                          <input 
+                            type="text"
+                            value={rafiqModelValue}
+                            onChange={(e) => setServerRafiqModel(prev => ({ ...prev, [serverId]: e.target.value }))}
+                            placeholder="gemini-2.5-flash..."
+                            className="flex-1 px-4 py-2.5 rounded-xl text-[13px] font-medium outline-none transition-all"
+                            style={{ 
+                              background: P.card, 
+                              border: `1px solid ${P.border}`, 
+                              color: P.text,
+                              fontFamily: "monospace"
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => fetchLatestModels(serverId, srv.baseUrl, 'rafiq')}
+                            disabled={isLoaderRafiq}
+                            className="px-3 rounded-xl text-[11px] font-bold border cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+                            style={{ color: P.text, borderColor: P.border, background: P.card }}
+                          >
+                            {isLoaderRafiq ? "جاري..." : "جلب"}
+                          </button>
                         </div>
                       </div>
                     </div>
-                  );
-                }
-
-                if (serverId === "bluesminds") {
-                  return (
-                    <div key="bluesminds" className="p-4 rounded-2xl border space-y-4" style={{ background: P.bg, borderColor: P.border }}>
-                      <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: P.border }}>
-                        <h4 className="font-bold text-[14px]" style={{ color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}>🌿 سێرڤەری Bluesminds</h4>
-                        {adminServersDisabled.has("bluesminds") && (
-                          <span className="text-[10px] text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-full" style={{ fontFamily: "'Noto Kufi Arabic'" }}>کوژاوەتەوە</span>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Doctor Keys */}
-                        <KeyChipsInput
-                          value={adminBmDrKeysText}
-                          onChange={setAdminBmDrKeysText}
-                          label="کلیلەکانی دکتۆر (Bluesminds)"
-                          placeholder="مفتاح API جديد..."
-                          maxKeys={100}
-                          palette={P}
-                          dark={dark}
-                          onTestKey={(key) => testApiKey('bluesminds', key)}
-                        />
-                        {/* Rafiq Keys */}
-                        <KeyChipsInput
-                          value={adminBmRafiqKeysText}
-                          onChange={setAdminBmRafiqKeysText}
-                          label="کلیلەکانی ڕەفیق (Bluesminds)"
-                          placeholder="مفتاح API جديد..."
-                          maxKeys={100}
-                          palette={P}
-                          dark={dark}
-                          onTestKey={(key) => testApiKey('bluesminds', key)}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Doctor Model */}
-                        <div className="space-y-1.5">
-                          <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مۆدێلی دکتۆر (Doctor Model)</label>
-                          <div className="flex gap-2">
-                            <input 
-                              type="text"
-                              value={adminBmDrModel}
-                              onChange={(e) => setAdminBmDrModel(e.target.value)}
-                              placeholder="gemini-2.5-flash..."
-                              className="flex-1 px-4 py-2.5 rounded-xl text-[13px] font-medium outline-none transition-all"
-                              style={{ 
-                                background: P.card, 
-                                border: `1px solid ${P.border}`, 
-                                color: P.text,
-                                fontFamily: "monospace"
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => fetchLatestModels('bluesminds', 'doctor')}
-                              disabled={fetchingBmDrModels}
-                              className="px-3 rounded-xl text-[11px] font-bold border cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-all"
-                              style={{ color: P.text, borderColor: P.border, background: P.card }}
-                            >
-                              {fetchingBmDrModels ? "جاري..." : "جلب"}
-                            </button>
-                          </div>
-                        </div>
-                        {/* Rafiq Model */}
-                        <div className="space-y-1.5">
-                          <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مۆدێلی ڕەفیق (Rafiq Model)</label>
-                          <div className="flex gap-2">
-                            <input 
-                              type="text"
-                              value={adminBmRafiqModel}
-                              onChange={(e) => setAdminBmRafiqModel(e.target.value)}
-                              placeholder="gemini-2.5-flash..."
-                              className="flex-1 px-4 py-2.5 rounded-xl text-[13px] font-medium outline-none transition-all"
-                              style={{ 
-                                background: P.card, 
-                                border: `1px solid ${P.border}`, 
-                                color: P.text,
-                                fontFamily: "monospace"
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => fetchLatestModels('bluesminds', 'rafiq')}
-                              disabled={fetchingBmRafiqModels}
-                              className="px-3 rounded-xl text-[11px] font-bold border cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-all"
-                              style={{ color: P.text, borderColor: P.border, background: P.card }}
-                            >
-                              {fetchingBmRafiqModels ? "جاري..." : "جلب"}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                if (serverId === "manus") {
-                  return (
-                    <div key="manus" className="p-4 rounded-2xl border space-y-4" style={{ background: P.bg, borderColor: P.border }}>
-                      <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: P.border }}>
-                        <h4 className="font-bold text-[14px]" style={{ color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}>🤖 سێرڤەری Manus</h4>
-                        {adminServersDisabled.has("manus") && (
-                          <span className="text-[10px] text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-full" style={{ fontFamily: "'Noto Kufi Arabic'" }}>کوژاوەتەوە</span>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Doctor Keys */}
-                        <KeyChipsInput
-                          value={adminDrKeysText}
-                          onChange={setAdminDrKeysText}
-                          label="کلیلەکانی دکتۆر (Manus)"
-                          placeholder="مفتاح API جديد..."
-                          maxKeys={100}
-                          palette={P}
-                          dark={dark}
-                          onTestKey={(key) => testApiKey('manus', key)}
-                        />
-                        {/* Rafiq Keys */}
-                        <KeyChipsInput
-                          value={adminRafiqKeysText}
-                          onChange={setAdminRafiqKeysText}
-                          label="کلیلەکانی ڕەفیق (Manus)"
-                          placeholder="مفتاح API جديد..."
-                          maxKeys={100}
-                          palette={P}
-                          dark={dark}
-                          onTestKey={(key) => testApiKey('manus', key)}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Doctor Model */}
-                        <div className="space-y-1.5">
-                          <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مۆدێلی دکتۆر (Doctor Model)</label>
-                          <div className="flex gap-2">
-                            <input 
-                              type="text"
-                              value={adminDrModel}
-                              onChange={(e) => setAdminDrModel(e.target.value)}
-                              placeholder="gemini-2.5-flash..."
-                              className="flex-1 px-4 py-2.5 rounded-xl text-[13px] font-medium outline-none transition-all"
-                              style={{ 
-                                background: P.card, 
-                                border: `1px solid ${P.border}`, 
-                                color: P.text,
-                                fontFamily: "monospace"
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => fetchLatestModels('manus', 'doctor')}
-                              disabled={fetchingManusDrModels}
-                              className="px-3 rounded-xl text-[11px] font-bold border cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-all"
-                              style={{ color: P.text, borderColor: P.border, background: P.card }}
-                            >
-                              {fetchingManusDrModels ? "جاري..." : "جلب"}
-                            </button>
-                          </div>
-                        </div>
-                        {/* Rafiq Model */}
-                        <div className="space-y-1.5">
-                          <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>مۆدێلی ڕەفیق (Rafiq Model)</label>
-                          <div className="flex gap-2">
-                            <input 
-                              type="text"
-                              value={adminRafiqModel}
-                              onChange={(e) => setAdminRafiqModel(e.target.value)}
-                              placeholder="gemini-2.5-flash..."
-                              className="flex-1 px-4 py-2.5 rounded-xl text-[13px] font-medium outline-none transition-all"
-                              style={{ 
-                                background: P.card, 
-                                border: `1px solid ${P.border}`, 
-                                color: P.text,
-                                fontFamily: "monospace"
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => fetchLatestModels('manus', 'rafiq')}
-                              disabled={fetchingManusRafiqModels}
-                              className="px-3 rounded-xl text-[11px] font-bold border cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-all"
-                              style={{ color: P.text, borderColor: P.border, background: P.card }}
-                            >
-                              {fetchingManusRafiqModels ? "جاري..." : "جلب"}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-                return null;
+                  </div>
+                );
               })}\n\n              {/* Puter Fallback */}
               <div className="space-y-1.5 pt-2 mt-2 border-t" style={{ borderColor: P.border }}>
                 <label className="text-[12px] font-bold block" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>موديل خادم الطوارئ (Puter Fallback)</label>
