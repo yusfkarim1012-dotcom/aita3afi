@@ -1521,18 +1521,41 @@ export default function App() {
 
             {/* Typing */}
             {loading && (
-              <div className="anim-slide-up flex items-start gap-3">
-                <BotAvatar size={36} isDoctor={currentPersona === "doctor"} />
-                <div className="rounded-2xl rounded-br-sm px-5 py-4" style={{ background: P.botBubble, border: `1px solid ${P.botBubbleBorder}`, boxShadow: P.botBubbleShadow }}>
-                  <div className="flex items-center gap-3">
-                    <div className="flex gap-1.5 items-center">
-                      <span className="w-2 h-2 rounded-full dot-anim" style={{ background: P.accent }} />
-                      <span className="w-2 h-2 rounded-full dot-anim" style={{ background: P.accent }} />
-                      <span className="w-2 h-2 rounded-full dot-anim" style={{ background: P.accent }} />
+              <div className="ai-response-row anim-slide-up flex items-start gap-3">
+                <div className="ai-response-avatar-wrap flex-shrink-0">
+                  <BotAvatar size={40} isDoctor={currentPersona === "doctor"} />
+                </div>
+                <div className={`ai-response-card ai-typing-card ${dark ? "dark-msg" : "light-msg"} ${currentPersona === "doctor" ? "persona-doctor" : "persona-rafiq"}`}>
+                  <div className="ai-response-header">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="ai-response-name" style={{ fontFamily: "'Noto Kufi Arabic'" }}>{botName}</span>
+                        <span className="ai-response-role" style={{ fontFamily: "'Noto Kufi Arabic'" }}>يحضّر الرد</span>
+                      </div>
+                      <div className="ai-response-subline">
+                        <Sparkles size={11} />
+                        <span>يحلل المحادثة ويجهز إجابة مرتبة</span>
+                      </div>
                     </div>
-                    <span className="text-[13px] font-medium" style={{ color: P.text2, fontFamily: "'Noto Kufi Arabic'" }}>
-                      {botName} يكتب...
-                    </span>
+                  </div>
+                  <div className="ai-typing-body">
+                    <div className="ai-typing-orb" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3">
+                        <div className="flex gap-1.5 items-center">
+                          <span className="w-2 h-2 rounded-full dot-anim" />
+                          <span className="w-2 h-2 rounded-full dot-anim" />
+                          <span className="w-2 h-2 rounded-full dot-anim" />
+                        </div>
+                        <span className="text-[13px] font-bold" style={{ fontFamily: "'Noto Kufi Arabic'" }}>
+                          {botName} يكتب...
+                        </span>
+                      </div>
+                      <div className="ai-typing-lines">
+                        <span />
+                        <span />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1771,71 +1794,90 @@ interface MsgProps {
 }
 
 function BotMsg({ content, t, dark, fSize, P, botName, isDoctor, isPuterAuthPrompt, serverUsed }: MsgProps) {
+  const personaClass = isDoctor ? "persona-doctor" : "persona-rafiq";
+  const personaLabel = isDoctor ? "تحليل علاجي ذكي" : "دعم وجداني ذكي";
+  const personaSubtitle = isDoctor
+    ? "قراءة منظمة للحالة مع خطوات عملية قابلة للتطبيق"
+    : "رد دافئ يوازن بين التشجيع والوضوح والمتابعة";
+  const eyebrow = isDoctor ? "TA3AFI CLINICAL INSIGHT" : "TA3AFI COMPANION INSIGHT";
+  const serverMeta = serverUsed
+    ? {
+        first: { label: "الخادم الرئيسي", color: "#22c55e" },
+        second: { label: "الخادم الاحتياطي", color: "#eab308" },
+        third: { label: "خادم الطوارئ", color: "#ef4444" },
+      }[serverUsed]
+    : null;
+
   return (
-    <div className="flex items-start gap-3 w-full">
-      <BotAvatar size={36} isDoctor={isDoctor} />
-      <div className="flex flex-col gap-2 min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="text-[12px] font-extrabold" style={{ color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}>
-            {botName}
-          </span>
-          <div className="flex items-center gap-1" style={{ color: P.text3 }}>
-            <Clock3 size={10} />
-            <span className="text-[10px]">{t}</span>
-          </div>
-        </div>
+    <div className="ai-response-row flex items-start gap-3 w-full">
+      <div className="ai-response-avatar-wrap flex-shrink-0">
+        <BotAvatar size={40} isDoctor={isDoctor} />
+      </div>
+      <div className="flex flex-col min-w-0 flex-1">
         <div
-          className={`rounded-2xl rounded-tr-sm px-5 py-5 overflow-hidden ${dark ? "dark-msg" : "light-msg"}`}
+          className={`ai-response-card ${dark ? "dark-msg" : "light-msg"} ${personaClass}`}
           style={{
-            background: P.botBubble,
-            border: `1px solid ${P.botBubbleBorder}`,
-            boxShadow: P.botBubbleShadow,
+            color: dark ? "rgba(255,255,255,0.93)" : "rgba(0,0,0,0.82)",
           }}
         >
+          <div className="ai-card-glow ai-card-glow-a" />
+          <div className="ai-card-glow ai-card-glow-b" />
+          <div className="ai-response-header">
+            <div className="ai-response-title-wrap min-w-0">
+              <div className="ai-response-mark" aria-hidden="true">
+                <span />
+                <span />
+              </div>
+              <div className="ai-response-eyebrow">{eyebrow}</div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="ai-response-name" style={{ fontFamily: "'Noto Kufi Arabic'" }}>
+                  {botName}
+                </span>
+                <span className="ai-response-role" style={{ fontFamily: "'Noto Kufi Arabic'" }}>
+                  {personaLabel}
+                </span>
+              </div>
+              <div className="ai-response-subline">
+                <Sparkles size={11} />
+                <span>{personaSubtitle}</span>
+              </div>
+            </div>
+
+            <div className="ai-response-meta">
+              {serverMeta && (
+                <span className="ai-response-chip" style={{ color: serverMeta.color }}>
+                  <span className="ai-response-chip-dot" style={{ background: serverMeta.color }} />
+                  {serverMeta.label}
+                </span>
+              )}
+              <span className="ai-response-time">
+                <Clock3 size={11} />
+                {t}
+              </span>
+            </div>
+          </div>
+
+          <div className="ai-response-ribbon" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
+
           <div
-            className="msg-content"
+            className="msg-content ai-response-body"
             style={{
               fontSize: fSize,
-              color: dark ? "rgba(255,255,255,0.93)" : "rgba(0,0,0,0.82)",
               fontFamily: "'IBM Plex Sans Arabic'",
             }}
           >
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {content}
             </ReactMarkdown>
-            {serverUsed && (
-              <div 
-                className="pt-2 mt-2 border-t text-[9px] font-normal flex items-center justify-end gap-1.5 opacity-60"
-                style={{ 
-                  borderColor: P.border,
-                  color: serverUsed === "first" 
-                    ? "#22c55e" 
-                    : serverUsed === "second" 
-                    ? "#eab308" 
-                    : "#ef4444" 
-                }}
-              >
-                <span className="w-1 h-1 rounded-full animate-pulse" style={{ 
-                  background: serverUsed === "first" 
-                    ? "#22c55e" 
-                    : serverUsed === "second" 
-                    ? "#eab308" 
-                    : "#ef4444" 
-                }} />
-                <span style={{ fontFamily: "'Noto Kufi Arabic', sans-serif" }}>
-                  {serverUsed === "first" 
-                    ? "تمت الإجابة بواسطة: الخادم الأول (الرئيسي)" 
-                    : serverUsed === "second" 
-                    ? "تمت الإجابة بواسطة: الخادم الثاني (الاحتياطي)" 
-                    : "تمت الإجابة بواسطة: الخادم الثالث (الطوارئ)"}
-                </span>
-              </div>
-            )}
             {isPuterAuthPrompt && (
-              <div className="pt-4 mt-4 border-t border-dashed flex justify-center" style={{ borderColor: P.border }}>
+              <div className="ai-response-action flex justify-center">
                 <button
                   onClick={() => window.puter && window.puter.auth.signIn()}
-                  className="px-6 py-3 rounded-2xl font-bold text-[13px] text-white transition-all cursor-pointer hover:opacity-90 shadow-lg flex items-center gap-2 animate-bounce"
+                  className="px-6 py-3 rounded-2xl font-bold text-[13px] text-white transition-all cursor-pointer hover:opacity-90 shadow-lg flex items-center gap-2"
                   style={{ background: "#6366f1", fontFamily: "'Noto Kufi Arabic'" }}
                 >
                   <span>🚀 إنشاء حساب / تسجيل الدخول في خادم الطوارئ</span>

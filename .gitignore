@@ -24,3 +24,5 @@ dist-ssr
 *.sln
 *.sw?
 ta3afi_credentials.txt
+.local-kv.json
+.cf-token
