@@ -66,6 +66,34 @@ export default function App() {
   const [editingTitle, setEditingTitle] = useState("");
   const [deleteConfirmConvId, setDeleteConfirmConvId] = useState<string | null>(null);
 
+  const [statsData, setStatsData] = useState<{
+    doctor: { hourly: any[]; daily: any[]; weekly: any[]; monthly: any[] };
+    rafiq: { hourly: any[]; daily: any[]; weekly: any[]; monthly: any[] };
+  } | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsTab, setStatsTab] = useState<"hour" | "day" | "week" | "month">("day");
+
+  const fetchStats = async () => {
+    setStatsLoading(true);
+    try {
+      const res = await fetch("/api/stats");
+      if (res.ok) {
+        const data = await res.json();
+        setStatsData(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch stats:", e);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdminAuthorized) {
+      fetchStats();
+    }
+  }, [isAdminAuthorized]);
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [showScroll, setShowScroll] = useState(false);
@@ -740,6 +768,8 @@ export default function App() {
         timestamp: new Date(),
         serverUsed
       });
+      // Track stats in background
+      fetch(`/api/track?persona=${currentPersona}`, { method: "POST" }).catch(e => console.warn("Stats tracking failed:", e));
     } catch (err: any) {
       if (err.message === "PUTER_AUTH_REQUIRED") {
         addMessage({ 
@@ -866,6 +896,104 @@ export default function App() {
           ) : (
             /* Settings Page */
             <div className="space-y-6 pt-2">
+
+              {/* Statistics Dashboard Section */}
+              <div className="p-4 rounded-2xl border space-y-4" style={{ background: P.bg, borderColor: P.border }}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[16px]">📊</span>
+                    <h4 className="font-bold text-[14px]" style={{ color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}>ئاماری نامەکان (إحصائيات الرسائل)</h4>
+                  </div>
+                  <button 
+                    onClick={fetchStats}
+                    disabled={statsLoading}
+                    className="text-[11px] font-bold px-2.5 py-1 rounded-lg border hover:bg-black/5 dark:hover:bg-white/5 transition-all disabled:opacity-55 cursor-pointer"
+                    style={{ color: P.text, borderColor: P.border, background: P.card }}
+                  >
+                    {statsLoading ? "جاری..." : "نوێکردنەوە 🔄"}
+                  </button>
+                </div>
+
+                {/* Tabs */}
+                <div className="flex rounded-xl p-0.5 border" style={{ borderColor: P.border, background: P.card }}>
+                  {(["hour", "day", "week", "month"] as const).map((tab) => {
+                    const label = {
+                      hour: "سەعاتی (ساعي)",
+                      day: "ڕۆژانە (يومي)",
+                      week: "هەفتانە (أسبوعي)",
+                      month: "مانگانە (شهري)"
+                    }[tab];
+                    const active = statsTab === tab;
+                    return (
+                      <button
+                        key={tab}
+                        onClick={() => setStatsTab(tab)}
+                        className="flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer"
+                        style={{
+                          background: active ? P.sendBtn : "transparent",
+                          color: active ? "#ffffff" : P.text2,
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {statsLoading && !statsData ? (
+                  <div className="py-8 text-center text-[12px] font-semibold" style={{ color: P.text2 }}>
+                    جاري تحميل الإحصائيات...
+                  </div>
+                ) : statsData ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Doctor Stats Card */}
+                    <div className="p-3.5 rounded-xl border space-y-3" style={{ background: P.card, borderColor: P.border }}>
+                      <div className="flex items-center justify-between border-b pb-1.5" style={{ borderColor: P.border }}>
+                        <span className="text-[12px] font-bold" style={{ color: P.text }}>🩺 دکتۆری تەعافی</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-bold">
+                          {statsData.doctor[statsTab === "hour" ? "hourly" : statsTab === "day" ? "daily" : statsTab === "week" ? "weekly" : "monthly"].reduce((acc, curr) => acc + curr.count, 0)} نامە
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+                        {statsData.doctor[statsTab === "hour" ? "hourly" : statsTab === "day" ? "daily" : statsTab === "week" ? "weekly" : "monthly"].map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-[11px] font-semibold">
+                            <span style={{ color: P.text2 }}>{item.label}</span>
+                            <div className="flex items-center gap-2 flex-1 mx-4 max-w-[120px]">
+                              <div className="h-1.5 rounded-full bg-emerald-500" style={{ width: `${Math.min(100, item.count * 5)}%` }} />
+                            </div>
+                            <span style={{ color: P.text }}>{item.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Rafiq Stats Card */}
+                    <div className="p-3.5 rounded-xl border space-y-3" style={{ background: P.card, borderColor: P.border }}>
+                      <div className="flex items-center justify-between border-b pb-1.5" style={{ borderColor: P.border }}>
+                        <span className="text-[12px] font-bold" style={{ color: P.text }}>🤝 ڕەفیقی تەعافی</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 font-bold">
+                          {statsData.rafiq[statsTab === "hour" ? "hourly" : statsTab === "day" ? "daily" : statsTab === "week" ? "weekly" : "monthly"].reduce((acc, curr) => acc + curr.count, 0)} نامە
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+                        {statsData.rafiq[statsTab === "hour" ? "hourly" : statsTab === "day" ? "daily" : statsTab === "week" ? "weekly" : "monthly"].map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-[11px] font-semibold">
+                            <span style={{ color: P.text2 }}>{item.label}</span>
+                            <div className="flex items-center gap-2 flex-1 mx-4 max-w-[120px]">
+                              <div className="h-1.5 rounded-full bg-indigo-500" style={{ width: `${Math.min(100, item.count * 5)}%` }} />
+                            </div>
+                            <span style={{ color: P.text }}>{item.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-4 text-center text-[12px]" style={{ color: P.text2 }}>
+                    لا توجد إحصائيات متوفرة حالياً.
+                  </div>
+                )}
+              </div>
 
                             {/* Custom Servers Management Section */}
               <div className="p-4 rounded-2xl border space-y-4" style={{ background: P.bg, borderColor: P.border }}>
