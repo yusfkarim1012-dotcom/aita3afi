@@ -85,12 +85,53 @@ export const onRequestGet = async (context) => {
       };
     };
 
+    // 5. Fetch Country Stats
+    const countryListResult = await kv.list({ prefix: 'stats_country_' });
+    const countryKeys = countryListResult.keys || [];
+
+    const countryNames = {
+      'IQ': 'العراق',
+      'TR': 'تركيا',
+      'DE': 'ألمانيا',
+      'SE': 'السويد',
+      'GB': 'المملكة المتحدة',
+      'US': 'الولايات المتحدة',
+      'NL': 'هولندا',
+      'FI': 'فنلندا',
+      'DK': 'الدنمارك',
+      'NO': 'النرويج',
+      'CA': 'كندا',
+      'AU': 'أستراليا',
+      'JO': 'الأردن',
+      'SY': 'سوريا',
+      'LB': 'لبنان',
+      'SA': 'السعودية',
+      'AE': 'الإمارات',
+      'KW': 'الكويت',
+      'QA': 'قطر',
+      'BH': 'البحرين',
+      'OM': 'عمان',
+      'EG': 'مصر',
+    };
+
+    const countriesData = await Promise.all(countryKeys.map(async (key) => {
+      const code = key.name.replace('stats_country_', '').toUpperCase();
+      const val = await kv.get(key.name);
+      return {
+        code,
+        name: countryNames[code] || code,
+        count: val ? parseInt(val, 10) : 0
+      };
+    }));
+
+    countriesData.sort((a, b) => b.count - a.count);
+
     const [doctor, rafiq] = await Promise.all([
       getStatsForPersona('doctor'),
       getStatsForPersona('rafiq')
     ]);
 
-    return new Response(JSON.stringify({ doctor, rafiq }), {
+    return new Response(JSON.stringify({ doctor, rafiq, countries: countriesData }), {
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*'

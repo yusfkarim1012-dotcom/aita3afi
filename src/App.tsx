@@ -74,6 +74,7 @@ export default function App() {
   const [statsData, setStatsData] = useState<{
     doctor: { hourly: any[]; daily: any[]; weekly: any[]; monthly: any[] };
     rafiq: { hourly: any[]; daily: any[]; weekly: any[]; monthly: any[] };
+    countries?: { code: string; name: string; count: number }[];
   } | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsTab, setStatsTab] = useState<"hour" | "day" | "week" | "month">("day");
@@ -1028,6 +1029,118 @@ export default function App() {
                   ) : (
                     <div className="py-8 text-center text-[12px]" style={{ color: P.text2 }}>
                       لا توجد إحصائيات متوفرة حالياً.
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Country Geolocation Stats Card */}
+                <div className="p-5 rounded-3xl border space-y-4 shadow-sm" style={{ background: P.card, borderColor: P.border }}>
+                  <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: P.border }}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[18px]">🌍</span>
+                      <div>
+                        <h4 className="font-extrabold text-[14px]" style={{ color: P.text, fontFamily: "'Noto Kufi Arabic'" }}>نەخشەی جوگرافی بەکارهێنەران (التوزيع الجغرافي)</h4>
+                        <p className="text-[10px]" style={{ color: P.text2 }}>ڕێژەی چالاکی بەکارهێنەران بەپێی وڵاتەکان</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {statsLoading && !statsData ? (
+                    <div className="py-12 text-center text-[12px] font-semibold" style={{ color: P.text2 }}>
+                      جاري تحميل الخريطة والبيانات الجغرافية...
+                    </div>
+                  ) : statsData && statsData.countries && statsData.countries.length > 0 ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      
+                      {/* Interactive stylized Map */}
+                      <div className="lg:col-span-2 relative flex flex-col items-center justify-center p-2 rounded-2xl border" style={{ borderColor: P.border, background: P.bg }}>
+                        <div className="w-full aspect-[2/1] relative overflow-hidden">
+                          <svg viewBox="0 0 500 250" className="w-full h-full text-black/10 dark:text-white/10 fill-current">
+                            {/* North America */}
+                            <path d="M30,40 L130,40 L160,80 L110,120 L80,150 L50,130 L20,80 Z" opacity="0.6" />
+                            {/* South America */}
+                            <path d="M80,160 L120,160 L100,230 L80,245 L70,230 Z" opacity="0.6" />
+                            {/* Eurasia/Europe/Asia */}
+                            <path d="M200,50 L370,50 L430,100 L450,170 L380,190 L310,150 L230,120 Z" opacity="0.6" />
+                            {/* Africa */}
+                            <path d="M220,130 L280,130 L300,170 L280,230 L250,240 L230,190 Z" opacity="0.6" />
+                            {/* Australia */}
+                            <path d="M400,200 L450,200 L460,235 L410,235 Z" opacity="0.6" />
+                            
+                            {/* Neon pulsing hotspots for active countries */}
+                            {statsData.countries.map((c, idx) => {
+                              const coords: Record<string, { x: number; y: number }> = {
+                                US: { x: 90, y: 80 },
+                                CA: { x: 95, y: 60 },
+                                GB: { x: 230, y: 75 },
+                                DE: { x: 245, y: 80 },
+                                SE: { x: 255, y: 60 },
+                                NL: { x: 240, y: 78 },
+                                FI: { x: 270, y: 55 },
+                                NO: { x: 248, y: 58 },
+                                DK: { x: 248, y: 72 },
+                                TR: { x: 285, y: 105 },
+                                IQ: { x: 300, y: 112 },
+                                JO: { x: 295, y: 117 },
+                                SY: { x: 293, y: 110 },
+                                LB: { x: 290, y: 114 },
+                                SA: { x: 310, y: 135 },
+                                AE: { x: 328, y: 138 },
+                                KW: { x: 318, y: 128 },
+                                QA: { x: 324, y: 134 },
+                                OM: { x: 335, y: 146 },
+                                EG: { x: 288, y: 128 },
+                                AU: { x: 430, y: 215 },
+                              };
+                              const pt = coords[c.code];
+                              if (!pt) return null;
+                              
+                              const maxCount = Math.max(...statsData.countries!.map(x => x.count), 1);
+                              const r = 4 + (c.count / maxCount) * 8;
+                              
+                              return (
+                                <g key={idx} className="cursor-pointer group">
+                                  <circle cx={pt.x} cy={pt.y} r={r + 6} fill="none" stroke="#6366f1" strokeWidth="1" opacity="0.6">
+                                    <animate attributeName="r" values={`${r};${r+8};${r}`} dur="2s" repeatCount="indefinite" />
+                                    <animate attributeName="opacity" values="0.8;0.1;0.8" dur="2s" repeatCount="indefinite" />
+                                  </circle>
+                                  <circle cx={pt.x} cy={pt.y} r={r} fill="#6366f1" className="drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                                  <title>{c.name}: {c.count} نامە</title>
+                                </g>
+                              );
+                            })}
+                          </svg>
+                        </div>
+                      </div>
+
+                      {/* Side List of Countries */}
+                      <div className="flex flex-col space-y-3">
+                        <h5 className="text-[11px] font-bold pb-1 border-b" style={{ color: P.text, borderColor: P.border, fontFamily: "'Noto Kufi Arabic'" }}>📊 وڵاتەکان بەپێی بەکارهێنان</h5>
+                        <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                          {statsData.countries.map((c, idx) => {
+                            const flagMap: Record<string, string> = {
+                              IQ: "🇮🇶", TR: "🇹🇷", DE: "🇩🇪", SE: "🇸🇪", GB: "🇬🇧", US: "🇺🇸", NL: "🇳🇱", FI: "🇫🇮", DK: "🇩🇰", NO: "🇳🇴", CA: "🇨🇦", AU: "🇦🇺", JO: "🇯🇴", SY: "🇸🇾", LB: "🇱🇧", SA: "🇸🇦", AE: "🇦🇪", KW: "🇰🇼", QA: "🇶🇦", BH: "🇧🇭", OM: "🇴🇲", EG: "🇪🇬"
+                            };
+                            const flag = flagMap[c.code] || "🌐";
+                            return (
+                              <div key={idx} className="flex items-center justify-between text-[11px] font-semibold p-1.5 rounded-lg hover:bg-black/2 dark:hover:bg-white/2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[14px]">{flag}</span>
+                                  <span style={{ color: P.text }}>{c.name}</span>
+                                </div>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/10 text-indigo-500">
+                                  {c.count} نامە
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center text-[12px]" style={{ color: P.text2 }}>
+                      لا توجد بيانات جغرافية متوفرة حالياً.
                     </div>
                   )}
                 </div>

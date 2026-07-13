@@ -4,6 +4,9 @@ export const onRequestPost = async (context) => {
     const persona = url.searchParams.get('persona') || 'doctor';
     const username = url.searchParams.get('username') || '';
     
+    // Get country from Cloudflare headers
+    const country = context.request.headers.get('cf-ipcountry') || 'IQ';
+    
     // Get current date/time components
     const now = new Date();
     
@@ -26,6 +29,7 @@ export const onRequestPost = async (context) => {
     const dayKey = `stats_day_${YYYY}${MM}${DD}_${persona}`;
     const weekKey = `stats_week_${YYYY}_W${WW}_${persona}`;
     const monthKey = `stats_month_${YYYY}${MM}_${persona}`;
+    const countryKey = `stats_country_${country.toUpperCase()}`;
     
     const kv = context.env.TA3AFI_DATA;
     
@@ -40,7 +44,8 @@ export const onRequestPost = async (context) => {
       increment(hourKey),
       increment(dayKey),
       increment(weekKey),
-      increment(monthKey)
+      increment(monthKey),
+      increment(countryKey)
     ];
     
     // Increment specific user message count if username is provided
