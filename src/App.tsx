@@ -66,6 +66,11 @@ export default function App() {
   const [editingTitle, setEditingTitle] = useState("");
   const [deleteConfirmConvId, setDeleteConfirmConvId] = useState<string | null>(null);
 
+  // Admin Panel States (Declared early to prevent ReferenceError in useEffect)
+  const [adminPassword, setAdminPassword] = useState("");
+  const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
+  const [adminError, setAdminError] = useState("");
+
   const [statsData, setStatsData] = useState<{
     doctor: { hourly: any[]; daily: any[]; weekly: any[]; monthly: any[] };
     rafiq: { hourly: any[]; daily: any[]; weekly: any[]; monthly: any[] };
@@ -126,10 +131,7 @@ export default function App() {
   const [userAuthError, setUserAuthError] = useState("");
   const [userAuthSuccess, setUserAuthSuccess] = useState("");
 
-  // Admin Panel States
-  const [adminPassword, setAdminPassword] = useState("");
-  const [isAdminAuthorized, setIsAdminAuthorized] = useState(false);
-  const [adminError, setAdminError] = useState("");
+
 
   const [adminCustomServers, setAdminCustomServers] = useState<CustomServer[]>([]);
   const [serverDrKeys, setServerDrKeys] = useState<Record<string, string>>({});
