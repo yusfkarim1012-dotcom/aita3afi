@@ -59,7 +59,7 @@ export default function App() {
     conversations, activeConversation, activeConvId, theme, fontSize,
     sidebarOpen, setTheme, setFontSize, setSidebarOpen, addMessage,
     newConversation, selectConversation, deleteConversation, updateConversationTitle, switchPersona,
-    currentUser, lastSynced, authLoading, login, signup, logout
+    currentUser, anonymousId, lastSynced, authLoading, login, signup, logout
   } = useAppStore();
 
   const [editingConvId, setEditingConvId] = useState<string | null>(null);
@@ -795,7 +795,7 @@ export default function App() {
       // Track stats in background
       const trackUrl = currentUser 
         ? `/api/track?persona=${currentPersona}&username=${encodeURIComponent(currentUser.username)}` 
-        : `/api/track?persona=${currentPersona}`;
+        : `/api/track?persona=${currentPersona}&username=${encodeURIComponent(anonymousId)}`;
       fetch(trackUrl, { method: "POST" }).catch(e => console.warn("Stats tracking failed:", e));
     } catch (err: any) {
       if (err.message === "PUTER_AUTH_REQUIRED") {
@@ -1034,19 +1034,27 @@ export default function App() {
 
                 {/* 2. Registered Users Statistics Card */}
                 <div className="p-5 rounded-3xl border space-y-4 shadow-sm" style={{ background: P.card, borderColor: P.border }}>
-                  <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: P.border }}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b gap-3" style={{ borderColor: P.border }}>
                     <div className="flex items-center gap-2">
                       <span className="text-[18px]">👥</span>
                       <div>
                         <h4 className="font-extrabold text-[14px]" style={{ color: P.text, fontFamily: "'Noto Kufi Arabic'" }}>ئاماری بەکارهێنەران (إحصائيات المستخدمين)</h4>
-                        <p className="text-[10px]" style={{ color: P.text2 }}>ژمارەی بەکارهێنەرانی تۆمارکراو و ڕێژەی چالاکیان</p>
+                        <p className="text-[10px]" style={{ color: P.text2 }}>ژمارەی بەکارهێنەرانی تۆمارکراو و میوانەکان</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       {usersData && (
-                        <span className="text-[10px] px-2.5 py-1 rounded-xl bg-indigo-500/10 text-indigo-500 font-extrabold" style={{ fontFamily: "'Noto Kufi Arabic'" }}>
-                          کۆى گشتی: {usersData.totalUsers} ئەندام
-                        </span>
+                        <div className="flex gap-1">
+                          <span className="text-[9.5px] px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-500 font-extrabold">
+                            الكل: {usersData.totalUsers}
+                          </span>
+                          <span className="text-[9.5px] px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-500 font-extrabold">
+                            مسجل: {usersData.registeredCount}
+                          </span>
+                          <span className="text-[9.5px] px-2 py-0.5 rounded-lg bg-zinc-500/10 text-zinc-500 dark:bg-zinc-500/15 dark:text-zinc-400 font-extrabold">
+                            زائر: {usersData.guestCount}
+                          </span>
+                        </div>
                       )}
                       <button 
                         onClick={fetchUsers}
@@ -1070,28 +1078,32 @@ export default function App() {
                           <thead>
                             <tr style={{ background: P.bg, borderBottom: `1px solid ${P.border}` }}>
                               <th className="p-3 text-[11px] font-bold" style={{ color: P.text }}>ناوی بەکارهێنەر (المستخدم)</th>
-                              <th className="p-3 text-[11px] font-bold text-center" style={{ color: P.text }}>ڕێژەی چالاکی</th>
+                              <th className="p-3 text-[11px] font-bold text-center" style={{ color: P.text }}>حساب</th>
                               <th className="p-3 text-[11px] font-bold text-left" style={{ color: P.text }}>نامەکان (الرسائل)</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {usersData.users.map((user, idx) => {
-                              const maxMsgs = Math.max(...usersData.users.map(u => u.msgCount), 1);
+                            {usersData.users.map((user: any, idx) => {
+                              const maxMsgs = Math.max(...usersData.users.map((u: any) => u.msgCount), 1);
                               const percentage = Math.min(100, (user.msgCount / maxMsgs) * 100);
                               return (
                                 <tr key={idx} className="transition-all hover:bg-black/2 dark:hover:bg-white/2" style={{ borderBottom: `1px solid ${P.border}` }}>
                                   <td className="p-3 text-[12px] font-semibold" style={{ color: P.text }}>
                                     <div className="flex items-center gap-2">
-                                      <span className="text-[14px]">👤</span>
-                                      <span>{user.username}</span>
+                                      <span className="text-[14px]">{user.isRegistered ? "👤" : "🌐"}</span>
+                                      <span className="truncate max-w-[140px]">{user.username}</span>
                                     </div>
                                   </td>
                                   <td className="p-3 text-center">
-                                    <div className="flex items-center justify-center gap-2 mx-auto max-w-[120px]">
-                                      <div className="h-1.5 w-full rounded-full bg-black/5 dark:bg-white/5 overflow-hidden">
-                                        <div className="h-full rounded-full bg-indigo-500" style={{ width: `${percentage}%` }} />
-                                      </div>
-                                    </div>
+                                    {user.isRegistered ? (
+                                      <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/10 text-emerald-500">
+                                        تۆمارکراو (مسجل)
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-zinc-500/10 text-zinc-500 dark:bg-zinc-500/15 dark:text-zinc-400">
+                                        میوان (زائر)
+                                      </span>
+                                    )}
                                   </td>
                                   <td className="p-3 text-left">
                                     <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-indigo-500/10 text-indigo-500">

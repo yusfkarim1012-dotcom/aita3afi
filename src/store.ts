@@ -73,6 +73,15 @@ function saveConversations(conversations: Conversation[]) {
 }
 
 export function useAppStore() {
+  const [anonymousId] = useState<string>(() => {
+    let id = localStorage.getItem("dr_anonymous_id");
+    if (!id) {
+      id = "guest_" + Math.random().toString(36).substring(2, 11);
+      localStorage.setItem("dr_anonymous_id", id);
+    }
+    return id;
+  });
+
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
   const [activeConvId, setActiveConvId] = useState<string>(() => {
     const savedActiveId = localStorage.getItem("dr_active_conv_id");
@@ -409,6 +418,7 @@ export function useAppStore() {
     updateConversationTitle,
     switchPersona,
     currentUser,
+    anonymousId,
     lastSynced,
     authLoading,
     login,

@@ -2,17 +2,18 @@ export const onRequestGet = async (context) => {
   try {
     const kv = context.env.TA3AFI_DATA;
     
-    // 1. List all keys with prefix 'user_'
-    // In Cloudflare KV, list returns a list of keys. Since we want to find all user accounts,
-    // we fetch them. Note that HASH of usernames are stored as user_[sha256].
+    // 1. List all keys with prefix 'user_' (Registered users)
     const listResult = await kv.list({ prefix: 'user_' });
     const keys = listResult.keys || [];
     
+    // 2. List all keys with prefix 'guest_user_' (Guest / unregistered users)
+    const guestListResult = await kv.list({ prefix: 'guest_user_' });
+    const guestKeys = guestListResult.keys || [];
+    
     const usersList = [];
     
-    // 2. Fetch each user's document
+    // Process registered users
     for (const key of keys) {
-      // Skip keys that are not direct user documents (just in case)
       if (!key.name.startsWith('user_') || key.name.includes('_msg_count_')) {
         continue;
       }
@@ -23,21 +24,46 @@ export const onRequestGet = async (context) => {
           const userDoc = JSON.parse(docVal);
           if (userDoc && userDoc.username) {
             const username = userDoc.username;
-            
-            // Get user message count from KV stats
             const cleanUser = username.trim().toLowerCase();
             const msgCountVal = await kv.get(`stats_user_msgs_${cleanUser}`);
             const msgCount = msgCountVal ? parseInt(msgCountVal, 10) : 0;
             
             usersList.push({
               username,
+              isRegistered: true,
               msgCount,
               keyName: key.name
             });
           }
         } catch (e) {
-          // Ignore JSON parse errors for non-user documents
-          console.warn("Failed to parse user doc for key:", key.name, e);
+          console.warn("Failed to parse registered user doc:", key.name, e);
+        }
+      }
+    }
+    
+    // Process guest users
+    for (const key of guestKeys) {
+      const docVal = await kv.get(key.name);
+      if (docVal) {
+        try {
+          const guestDoc = JSON.parse(docVal);
+          if (guestDoc && guestDoc.username) {
+            const rawUsername = guestDoc.username;
+            const msgCountVal = await kv.get(`stats_user_msgs_${rawUsername}`);
+            const msgCount = msgCountVal ? parseInt(msgCountVal, 10) : 0;
+            
+            // Format guest username nicely for display, e.g. "زائر (guest_a1b2c3d4)"
+            const friendlyName = `زائر (${rawUsername})`;
+            
+            usersList.push({
+              username: friendlyName,
+              isRegistered: false,
+              msgCount,
+              keyName: key.name
+            });
+          }
+        } catch (e) {
+          console.warn("Failed to parse guest user doc:", key.name, e);
         }
       }
     }
@@ -45,8 +71,13 @@ export const onRequestGet = async (context) => {
     // Sort users by message count (descending)
     usersList.sort((a, b) => b.msgCount - a.msgCount);
     
+    const registeredCount = usersList.filter(u => u.isRegistered).length;
+    const guestCount = usersList.filter(u => !u.isRegistered).length;
+    
     return new Response(JSON.stringify({
       totalUsers: usersList.length,
+      registeredCount,
+      guestCount,
       users: usersList
     }), {
       headers: {

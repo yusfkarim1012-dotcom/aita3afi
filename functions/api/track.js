@@ -48,6 +48,14 @@ export const onRequestPost = async (context) => {
       const cleanUser = username.trim().toLowerCase();
       const userMsgsKey = `stats_user_msgs_${cleanUser}`;
       promises.push(increment(userMsgsKey));
+      
+      // If it is an unregistered/guest user, record it in KV so we can list it in Admin panel
+      if (cleanUser.startsWith('guest_')) {
+        promises.push(kv.put(`guest_user_${cleanUser}`, JSON.stringify({
+          username: cleanUser,
+          lastActive: now.toISOString()
+        })));
+      }
     }
     
     await Promise.all(promises);
