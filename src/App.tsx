@@ -78,6 +78,12 @@ export default function App() {
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsTab, setStatsTab] = useState<"hour" | "day" | "week" | "month">("day");
 
+  const [usersData, setUsersData] = useState<{
+    totalUsers: number;
+    users: { username: string; msgCount: number }[];
+  } | null>(null);
+  const [usersLoading, setUsersLoading] = useState(false);
+
   const fetchStats = async () => {
     setStatsLoading(true);
     try {
@@ -93,9 +99,25 @@ export default function App() {
     }
   };
 
+  const fetchUsers = async () => {
+    setUsersLoading(true);
+    try {
+      const res = await fetch("/api/admin/users");
+      if (res.ok) {
+        const data = await res.json();
+        setUsersData(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch users stats:", e);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (isAdminAuthorized) {
       fetchStats();
+      fetchUsers();
     }
   }, [isAdminAuthorized]);
 
@@ -771,7 +793,10 @@ export default function App() {
         serverUsed
       });
       // Track stats in background
-      fetch(`/api/track?persona=${currentPersona}`, { method: "POST" }).catch(e => console.warn("Stats tracking failed:", e));
+      const trackUrl = currentUser 
+        ? `/api/track?persona=${currentPersona}&username=${encodeURIComponent(currentUser.username)}` 
+        : `/api/track?persona=${currentPersona}`;
+      fetch(trackUrl, { method: "POST" }).catch(e => console.warn("Stats tracking failed:", e));
     } catch (err: any) {
       if (err.message === "PUTER_AUTH_REQUIRED") {
         addMessage({ 
@@ -900,101 +925,193 @@ export default function App() {
             <div className="space-y-6 pt-2">
 
               {/* Statistics Dashboard Section */}
-              <div className="p-4 rounded-2xl border space-y-4" style={{ background: P.bg, borderColor: P.border }}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[16px]">📊</span>
-                    <h4 className="font-bold text-[14px]" style={{ color: P.accentText, fontFamily: "'Noto Kufi Arabic'" }}>ئاماری نامەکان (إحصائيات الرسائل)</h4>
+              <div className="grid grid-cols-1 gap-6">
+                
+                {/* 1. Message Volume Stats Card */}
+                <div className="p-5 rounded-3xl border space-y-4 shadow-sm" style={{ background: P.card, borderColor: P.border }}>
+                  <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: P.border }}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[18px]">📊</span>
+                      <div>
+                        <h4 className="font-extrabold text-[14px]" style={{ color: P.text, fontFamily: "'Noto Kufi Arabic'" }}>ئاماری نامەکان (إحصائيات الرسائل)</h4>
+                        <p className="text-[10px]" style={{ color: P.text2 }}>تێکڕای نامە نێردراوەکانی بەکارهێنەران</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={fetchStats}
+                      disabled={statsLoading}
+                      className="text-[11px] font-bold px-3 py-1.5 rounded-xl border hover:bg-black/5 dark:hover:bg-white/5 transition-all disabled:opacity-55 cursor-pointer flex items-center gap-1"
+                      style={{ color: P.text, borderColor: P.border, background: P.bg }}
+                    >
+                      <span>{statsLoading ? "جاري..." : "نوێکردنەوە 🔄"}</span>
+                    </button>
                   </div>
-                  <button 
-                    onClick={fetchStats}
-                    disabled={statsLoading}
-                    className="text-[11px] font-bold px-2.5 py-1 rounded-lg border hover:bg-black/5 dark:hover:bg-white/5 transition-all disabled:opacity-55 cursor-pointer"
-                    style={{ color: P.text, borderColor: P.border, background: P.card }}
-                  >
-                    {statsLoading ? "جاری..." : "نوێکردنەوە 🔄"}
-                  </button>
+
+                  {/* Tabs */}
+                  <div className="flex rounded-2xl p-0.5 border" style={{ borderColor: P.border, background: P.bg }}>
+                    {(["hour", "day", "week", "month"] as const).map((tab) => {
+                      const label = {
+                        hour: "سەعاتی (ساعي)",
+                        day: "ڕۆژانە (يومي)",
+                        week: "هەفتانە (أسبوعي)",
+                        month: "مانگانە (شهري)"
+                      }[tab];
+                      const active = statsTab === tab;
+                      return (
+                        <button
+                          key={tab}
+                          onClick={() => setStatsTab(tab)}
+                          className="flex-1 py-2 text-[11px] font-bold rounded-xl transition-all cursor-pointer"
+                          style={{
+                            background: active ? P.sendBtn : "transparent",
+                            color: active ? "#ffffff" : P.text2,
+                          }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {statsLoading && !statsData ? (
+                    <div className="py-12 text-center text-[12px] font-semibold" style={{ color: P.text2 }}>
+                      جاري تحميل الإحصائيات...
+                    </div>
+                  ) : statsData ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Doctor Stats Card */}
+                      <div className="p-4 rounded-2xl border space-y-3" style={{ background: P.bg, borderColor: P.border }}>
+                        <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: P.border }}>
+                          <span className="text-[12px] font-extrabold" style={{ color: P.text }}>🩺 دکتۆری تەعافی</span>
+                          <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-extrabold">
+                            {statsData.doctor[statsTab === "hour" ? "hourly" : statsTab === "day" ? "daily" : statsTab === "week" ? "weekly" : "monthly"].reduce((acc, curr) => acc + curr.count, 0)} نامە
+                          </span>
+                        </div>
+                        <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                          {statsData.doctor[statsTab === "hour" ? "hourly" : statsTab === "day" ? "daily" : statsTab === "week" ? "weekly" : "monthly"].map((item, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-[11px] font-semibold">
+                              <span className="w-14 truncate" style={{ color: P.text2 }}>{item.label}</span>
+                              <div className="flex items-center gap-2 flex-1 mx-3">
+                                <div className="h-2 w-full rounded-full bg-black/5 dark:bg-white/5 overflow-hidden">
+                                  <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, item.count * 10)}%` }} />
+                                </div>
+                              </div>
+                              <span className="w-6 text-left" style={{ color: P.text }}>{item.count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Rafiq Stats Card */}
+                      <div className="p-4 rounded-2xl border space-y-3" style={{ background: P.bg, borderColor: P.border }}>
+                        <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: P.border }}>
+                          <span className="text-[12px] font-extrabold" style={{ color: P.text }}>🤝 ڕەفیقی تەعافی</span>
+                          <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 font-extrabold">
+                            {statsData.rafiq[statsTab === "hour" ? "hourly" : statsTab === "day" ? "daily" : statsTab === "week" ? "weekly" : "monthly"].reduce((acc, curr) => acc + curr.count, 0)} نامە
+                          </span>
+                        </div>
+                        <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                          {statsData.rafiq[statsTab === "hour" ? "hourly" : statsTab === "day" ? "daily" : statsTab === "week" ? "weekly" : "monthly"].map((item, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-[11px] font-semibold">
+                              <span className="w-14 truncate" style={{ color: P.text2 }}>{item.label}</span>
+                              <div className="flex items-center gap-2 flex-1 mx-3">
+                                <div className="h-2 w-full rounded-full bg-black/5 dark:bg-white/5 overflow-hidden">
+                                  <div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.min(100, item.count * 10)}%` }} />
+                                </div>
+                              </div>
+                              <span className="w-6 text-left" style={{ color: P.text }}>{item.count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center text-[12px]" style={{ color: P.text2 }}>
+                      لا توجد إحصائيات متوفرة حالياً.
+                    </div>
+                  )}
                 </div>
 
-                {/* Tabs */}
-                <div className="flex rounded-xl p-0.5 border" style={{ borderColor: P.border, background: P.card }}>
-                  {(["hour", "day", "week", "month"] as const).map((tab) => {
-                    const label = {
-                      hour: "سەعاتی (ساعي)",
-                      day: "ڕۆژانە (يومي)",
-                      week: "هەفتانە (أسبوعي)",
-                      month: "مانگانە (شهري)"
-                    }[tab];
-                    const active = statsTab === tab;
-                    return (
-                      <button
-                        key={tab}
-                        onClick={() => setStatsTab(tab)}
-                        className="flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer"
-                        style={{
-                          background: active ? P.sendBtn : "transparent",
-                          color: active ? "#ffffff" : P.text2,
-                        }}
+                {/* 2. Registered Users Statistics Card */}
+                <div className="p-5 rounded-3xl border space-y-4 shadow-sm" style={{ background: P.card, borderColor: P.border }}>
+                  <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: P.border }}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[18px]">👥</span>
+                      <div>
+                        <h4 className="font-extrabold text-[14px]" style={{ color: P.text, fontFamily: "'Noto Kufi Arabic'" }}>ئاماری بەکارهێنەران (إحصائيات المستخدمين)</h4>
+                        <p className="text-[10px]" style={{ color: P.text2 }}>ژمارەی بەکارهێنەرانی تۆمارکراو و ڕێژەی چالاکیان</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {usersData && (
+                        <span className="text-[10px] px-2.5 py-1 rounded-xl bg-indigo-500/10 text-indigo-500 font-extrabold" style={{ fontFamily: "'Noto Kufi Arabic'" }}>
+                          کۆى گشتی: {usersData.totalUsers} ئەندام
+                        </span>
+                      )}
+                      <button 
+                        onClick={fetchUsers}
+                        disabled={usersLoading}
+                        className="text-[11px] font-bold px-3 py-1.5 rounded-xl border hover:bg-black/5 dark:hover:bg-white/5 transition-all disabled:opacity-55 cursor-pointer"
+                        style={{ color: P.text, borderColor: P.border, background: P.bg }}
                       >
-                        {label}
+                        {usersLoading ? "جاري..." : "نوێکردنەوە 🔄"}
                       </button>
-                    );
-                  })}
+                    </div>
+                  </div>
+
+                  {usersLoading && !usersData ? (
+                    <div className="py-12 text-center text-[12px] font-semibold" style={{ color: P.text2 }}>
+                      جاري تحميل بيانات المستخدمين...
+                    </div>
+                  ) : usersData && usersData.users.length > 0 ? (
+                    <div className="border rounded-2xl overflow-hidden" style={{ borderColor: P.border }}>
+                      <div className="max-h-[220px] overflow-y-auto pr-0.5">
+                        <table className="w-full text-right border-collapse">
+                          <thead>
+                            <tr style={{ background: P.bg, borderBottom: `1px solid ${P.border}` }}>
+                              <th className="p-3 text-[11px] font-bold" style={{ color: P.text }}>ناوی بەکارهێنەر (المستخدم)</th>
+                              <th className="p-3 text-[11px] font-bold text-center" style={{ color: P.text }}>ڕێژەی چالاکی</th>
+                              <th className="p-3 text-[11px] font-bold text-left" style={{ color: P.text }}>نامەکان (الرسائل)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {usersData.users.map((user, idx) => {
+                              const maxMsgs = Math.max(...usersData.users.map(u => u.msgCount), 1);
+                              const percentage = Math.min(100, (user.msgCount / maxMsgs) * 100);
+                              return (
+                                <tr key={idx} className="transition-all hover:bg-black/2 dark:hover:bg-white/2" style={{ borderBottom: `1px solid ${P.border}` }}>
+                                  <td className="p-3 text-[12px] font-semibold" style={{ color: P.text }}>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[14px]">👤</span>
+                                      <span>{user.username}</span>
+                                    </div>
+                                  </td>
+                                  <td className="p-3 text-center">
+                                    <div className="flex items-center justify-center gap-2 mx-auto max-w-[120px]">
+                                      <div className="h-1.5 w-full rounded-full bg-black/5 dark:bg-white/5 overflow-hidden">
+                                        <div className="h-full rounded-full bg-indigo-500" style={{ width: `${percentage}%` }} />
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="p-3 text-left">
+                                    <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-indigo-500/10 text-indigo-500">
+                                      {user.msgCount} نامە
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center text-[12px]" style={{ color: P.text2 }}>
+                      لا يوجد مستخدمين مسجلين حالياً.
+                    </div>
+                  )}
                 </div>
 
-                {statsLoading && !statsData ? (
-                  <div className="py-8 text-center text-[12px] font-semibold" style={{ color: P.text2 }}>
-                    جاري تحميل الإحصائيات...
-                  </div>
-                ) : statsData ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Doctor Stats Card */}
-                    <div className="p-3.5 rounded-xl border space-y-3" style={{ background: P.card, borderColor: P.border }}>
-                      <div className="flex items-center justify-between border-b pb-1.5" style={{ borderColor: P.border }}>
-                        <span className="text-[12px] font-bold" style={{ color: P.text }}>🩺 دکتۆری تەعافی</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-bold">
-                          {statsData.doctor[statsTab === "hour" ? "hourly" : statsTab === "day" ? "daily" : statsTab === "week" ? "weekly" : "monthly"].reduce((acc, curr) => acc + curr.count, 0)} نامە
-                        </span>
-                      </div>
-                      <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                        {statsData.doctor[statsTab === "hour" ? "hourly" : statsTab === "day" ? "daily" : statsTab === "week" ? "weekly" : "monthly"].map((item, idx) => (
-                          <div key={idx} className="flex items-center justify-between text-[11px] font-semibold">
-                            <span style={{ color: P.text2 }}>{item.label}</span>
-                            <div className="flex items-center gap-2 flex-1 mx-4 max-w-[120px]">
-                              <div className="h-1.5 rounded-full bg-emerald-500" style={{ width: `${Math.min(100, item.count * 5)}%` }} />
-                            </div>
-                            <span style={{ color: P.text }}>{item.count}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Rafiq Stats Card */}
-                    <div className="p-3.5 rounded-xl border space-y-3" style={{ background: P.card, borderColor: P.border }}>
-                      <div className="flex items-center justify-between border-b pb-1.5" style={{ borderColor: P.border }}>
-                        <span className="text-[12px] font-bold" style={{ color: P.text }}>🤝 ڕەفیقی تەعافی</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 font-bold">
-                          {statsData.rafiq[statsTab === "hour" ? "hourly" : statsTab === "day" ? "daily" : statsTab === "week" ? "weekly" : "monthly"].reduce((acc, curr) => acc + curr.count, 0)} نامە
-                        </span>
-                      </div>
-                      <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                        {statsData.rafiq[statsTab === "hour" ? "hourly" : statsTab === "day" ? "daily" : statsTab === "week" ? "weekly" : "monthly"].map((item, idx) => (
-                          <div key={idx} className="flex items-center justify-between text-[11px] font-semibold">
-                            <span style={{ color: P.text2 }}>{item.label}</span>
-                            <div className="flex items-center gap-2 flex-1 mx-4 max-w-[120px]">
-                              <div className="h-1.5 rounded-full bg-indigo-500" style={{ width: `${Math.min(100, item.count * 5)}%` }} />
-                            </div>
-                            <span style={{ color: P.text }}>{item.count}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="py-4 text-center text-[12px]" style={{ color: P.text2 }}>
-                    لا توجد إحصائيات متوفرة حالياً.
-                  </div>
-                )}
               </div>
 
                             {/* Custom Servers Management Section */}

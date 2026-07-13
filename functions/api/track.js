@@ -2,11 +2,11 @@ export const onRequestPost = async (context) => {
   try {
     const url = new URL(context.request.url);
     const persona = url.searchParams.get('persona') || 'doctor';
+    const username = url.searchParams.get('username') || '';
     
     // Get current date/time components
     const now = new Date();
     
-    // YYYYMMDD
     const YYYY = now.getFullYear();
     const MM = String(now.getMonth() + 1).padStart(2, '0');
     const DD = String(now.getDate()).padStart(2, '0');
@@ -36,12 +36,21 @@ export const onRequestPost = async (context) => {
       await kv.put(key, String(count + 1));
     };
     
-    await Promise.all([
+    const promises = [
       increment(hourKey),
       increment(dayKey),
       increment(weekKey),
       increment(monthKey)
-    ]);
+    ];
+    
+    // Increment specific user message count if username is provided
+    if (username.trim()) {
+      const cleanUser = username.trim().toLowerCase();
+      const userMsgsKey = `stats_user_msgs_${cleanUser}`;
+      promises.push(increment(userMsgsKey));
+    }
+    
+    await Promise.all(promises);
     
     return new Response('OK', {
       headers: { 'Access-Control-Allow-Origin': '*' }
