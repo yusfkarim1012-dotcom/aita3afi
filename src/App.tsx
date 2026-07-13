@@ -27,6 +27,8 @@ import {
   HeartPulse,
   Power,
   PowerOff,
+  Edit2,
+  Check,
 } from "lucide-react";
 
 function encodeVal(val: string): string {
@@ -56,9 +58,13 @@ export default function App() {
   const {
     conversations, activeConversation, activeConvId, theme, fontSize,
     sidebarOpen, setTheme, setFontSize, setSidebarOpen, addMessage,
-    newConversation, selectConversation, deleteConversation, switchPersona,
+    newConversation, selectConversation, deleteConversation, updateConversationTitle, switchPersona,
     currentUser, lastSynced, authLoading, login, signup, logout
   } = useAppStore();
+
+  const [editingConvId, setEditingConvId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const [deleteConfirmConvId, setDeleteConfirmConvId] = useState<string | null>(null);
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -1346,25 +1352,102 @@ export default function App() {
         <div className="flex-1 overflow-y-auto scrollbar-thin px-3 pb-3 pt-1 space-y-1">
           {[...conversations].filter(c => (c.persona || "doctor") === currentPersona).reverse().map((c) => {
             const active = c.id === activeConvId;
+            const isEditing = editingConvId === c.id;
+
             return (
               <div
                 key={c.id}
-                onClick={() => selectConversation(c.id)}
-                className="group flex items-center gap-3 px-3.5 py-3 rounded-2xl cursor-pointer transition-all"
+                onClick={() => {
+                  if (!isEditing) {
+                    selectConversation(c.id);
+                  }
+                }}
+                className={`group flex items-center gap-3 px-3.5 py-2.5 rounded-2xl cursor-pointer transition-all ${
+                  active ? "bg-indigo-500/10 dark:bg-indigo-500/15" : "hover:bg-black/5 dark:hover:bg-white/5"
+                }`}
                 style={{
-                  background: active ? P.accentLight : "transparent",
                   color: active ? P.text : P.text2,
                 }}
               >
-                <MessageSquare size={16} style={{ opacity: active ? 0.9 : 0.4, color: active ? P.accentText : undefined }} />
-                <span className="flex-1 truncate text-[13px] font-medium">{c.title}</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); deleteConversation(c.id); }}
-                  className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer hover:scale-110 active:scale-90"
-                  style={{ color: "#ef4444", background: dark ? "rgba(239,68,68,0.08)" : "rgba(239,68,68,0.06)" }}
-                >
-                  <Trash2 size={13} />
-                </button>
+                <MessageSquare size={16} className="shrink-0" style={{ opacity: active ? 0.9 : 0.4, color: active ? P.accentText : undefined }} />
+                
+                {isEditing ? (
+                  <div className="flex flex-1 items-center gap-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="text"
+                      value={editingTitle}
+                      onChange={(e) => setEditingTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.stopPropagation();
+                          updateConversationTitle(c.id, editingTitle);
+                          setEditingConvId(null);
+                        } else if (e.key === "Escape") {
+                          e.stopPropagation();
+                          setEditingConvId(null);
+                        }
+                      }}
+                      className="flex-1 text-[12px] px-2 py-1 outline-none rounded-lg border focus:ring-1 min-w-0"
+                      style={{
+                        background: P.bg,
+                        borderColor: P.border,
+                        color: P.text,
+                      }}
+                      autoFocus
+                    />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        updateConversationTitle(c.id, editingTitle);
+                        setEditingConvId(null);
+                      }}
+                      className="px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-0.5 transition-all cursor-pointer hover:scale-105 active:scale-95 shrink-0"
+                      style={{ color: "#22c55e", background: dark ? "rgba(34,197,94,0.15)" : "rgba(34,197,94,0.08)" }}
+                    >
+                      <Check size={11} strokeWidth={2.5} />
+                      <span>حفظ</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingConvId(null);
+                      }}
+                      className="p-1 rounded-lg transition-all cursor-pointer hover:scale-105 active:scale-95 shrink-0"
+                      style={{ color: "#ef4444", background: dark ? "rgba(239,68,68,0.15)" : "rgba(239,68,68,0.08)" }}
+                    >
+                      <X size={11} strokeWidth={2.5} />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <span className="flex-1 truncate text-[13px] font-medium">{c.title}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingConvId(c.id);
+                          setEditingTitle(c.title);
+                        }}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer hover:scale-110 active:scale-90"
+                        style={{ color: P.accentText, background: P.accentLight }}
+                        title="تعديل"
+                      >
+                        <Edit2 size={12} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteConfirmConvId(c.id);
+                        }}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer hover:scale-110 active:scale-90"
+                        style={{ color: "#ef4444", background: dark ? "rgba(239,68,68,0.08)" : "rgba(239,68,68,0.06)" }}
+                        title="حذف"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             );
           })}
@@ -1768,6 +1851,57 @@ export default function App() {
                 {authTab === "login" ? "دخول إلى الحساب" : "تفعيل الحساب والنسخ الاحتياطي"}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ════════ CUSTOM DELETE DIALOG ════════ */}
+      {deleteConfirmConvId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md anim-fade-in" dir="rtl">
+          <div 
+            className="w-full max-w-sm rounded-3xl p-6 space-y-6 anim-scale-up text-center"
+            style={{ 
+              background: P.card, 
+              border: `1px solid ${P.border}`,
+              boxShadow: dark ? "0 10px 40px rgba(0,0,0,0.5)" : "0 10px 40px rgba(0,0,0,0.1)"
+            }}
+          >
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-red-500/10 dark:bg-red-500/15">
+                <Trash2 size={24} className="text-red-500" />
+              </div>
+              <h3 className="font-extrabold text-[16px] mt-2" style={{ color: P.text, fontFamily: "'Noto Kufi Arabic'" }}>
+                حذف المحادثة؟
+              </h3>
+              <p className="text-[12px] leading-relaxed" style={{ color: P.text2, fontFamily: "'IBM Plex Sans Arabic'" }}>
+                هل أنت متأكد من حذف هذه المحادثة بالكامل؟ لا يمكن التراجع عن هذا الإجراء.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  deleteConversation(deleteConfirmConvId);
+                  setDeleteConfirmConvId(null);
+                }}
+                className="flex-1 py-3 rounded-2xl font-bold text-[12.5px] text-white transition-all cursor-pointer hover:opacity-90 active:scale-97"
+                style={{ background: "linear-gradient(135deg, #ef4444, #dc2626)", fontFamily: "'Noto Kufi Arabic'" }}
+              >
+                نعم، احذف
+              </button>
+              <button
+                onClick={() => setDeleteConfirmConvId(null)}
+                className="flex-1 py-3 rounded-2xl font-bold text-[12.5px] transition-all cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 active:scale-97"
+                style={{ 
+                  background: dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)", 
+                  color: P.text, 
+                  border: `1px solid ${P.border}`,
+                  fontFamily: "'Noto Kufi Arabic'" 
+                }}
+              >
+                تراجع
+              </button>
+            </div>
           </div>
         </div>
       )}

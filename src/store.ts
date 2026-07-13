@@ -75,7 +75,11 @@ function saveConversations(conversations: Conversation[]) {
 export function useAppStore() {
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
   const [activeConvId, setActiveConvId] = useState<string>(() => {
+    const savedActiveId = localStorage.getItem("dr_active_conv_id");
     const convs = loadConversations();
+    if (savedActiveId && convs.some((c) => c.id === savedActiveId)) {
+      return savedActiveId;
+    }
     return convs[convs.length - 1]?.id || "";
   });
   const [theme, setThemeState] = useState<Theme>(() => {
@@ -143,6 +147,11 @@ export function useAppStore() {
 
   useEffect(() => { localStorage.setItem(THEME_KEY, theme); }, [theme]);
   useEffect(() => { localStorage.setItem(FONT_KEY, fontSize); }, [fontSize]);
+  useEffect(() => {
+    if (activeConvId) {
+      localStorage.setItem("dr_active_conv_id", activeConvId);
+    }
+  }, [activeConvId]);
 
   const login = useCallback(async (usernameInput: string, passwordInput: string) => {
     setAuthLoading(true);
@@ -182,7 +191,10 @@ export function useAppStore() {
         }));
         
         setConversations(formattedConvs);
-        if (formattedConvs.length > 0) {
+        const savedActiveId = localStorage.getItem("dr_active_conv_id");
+        if (savedActiveId && formattedConvs.some((c: any) => c.id === savedActiveId)) {
+          setActiveConvId(savedActiveId);
+        } else if (formattedConvs.length > 0) {
           setActiveConvId(formattedConvs[formattedConvs.length - 1].id);
         }
       }
@@ -371,6 +383,15 @@ export function useAppStore() {
     });
   }, [activeConvId]);
 
+  const updateConversationTitle = useCallback(
+    (id: string, newTitle: string) => {
+      setConversations((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, title: newTitle.trim() || "محادثة جديدة", updatedAt: new Date() } : c))
+      );
+    },
+    []
+  );
+
   return {
     conversations,
     activeConversation,
@@ -385,6 +406,7 @@ export function useAppStore() {
     newConversation,
     selectConversation,
     deleteConversation,
+    updateConversationTitle,
     switchPersona,
     currentUser,
     lastSynced,
